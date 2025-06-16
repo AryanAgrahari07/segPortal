@@ -126,6 +126,7 @@ exports.createSegment = async (req, res) => {
             group_name,
             group_order,
             group_condition,
+            between_group_condition,
             description
           )
           VALUES (
@@ -134,6 +135,7 @@ exports.createSegment = async (req, res) => {
             ${escapeSQLString(group.group_name || `Group ${i+1}`)},
             ${i+1},
             ${groupCondition ? escapeSQLString(groupCondition) : 'NULL'},
+            ${group.between_group_condition ? escapeSQLString(group.between_group_condition) : 'NULL'},
             ${group.description ? escapeSQLString(group.description) : 'NULL'}
           )
         `;
@@ -372,6 +374,7 @@ exports.updateSegment = async (req, res) => {
             group_name,
             group_order,
             group_condition,
+            between_group_condition,
             description
           )
           VALUES (
@@ -380,6 +383,7 @@ exports.updateSegment = async (req, res) => {
             ${escapeSQLString(group.group_name || `Group ${i+1}`)},
             ${i+1},
             ${groupCondition ? escapeSQLString(groupCondition) : 'NULL'},
+            ${group.between_group_condition ? escapeSQLString(group.between_group_condition) : 'NULL'},
             ${group.description ? escapeSQLString(group.description) : 'NULL'}
           )
         `;
@@ -468,6 +472,17 @@ exports.updateSegment = async (req, res) => {
     
     // Add filter groups to the response
     segment.filter_groups = enhancedFilterGroups;
+
+    // Extract between-group conditions to create a groupConditions array
+    const groupConditions = [];
+    for (let i = 0; i < enhancedFilterGroups.length - 1; i++) {
+      if (enhancedFilterGroups[i+1].between_group_condition) {
+        groupConditions.push(enhancedFilterGroups[i+1].between_group_condition);
+      } else {
+        groupConditions.push('AND');
+      }
+    }
+    segment.groupConditions = groupConditions;
 
     return res.status(200).json({
       success: true,

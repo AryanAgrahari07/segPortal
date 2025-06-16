@@ -160,12 +160,12 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        {/* <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Data Platform</h1>
             <p className="text-muted-foreground">Welcome back, {user?.first_name}! Manage your tables and segments.</p>
           </div>
-        </div>
+        </div> */}
 
         <div className="flex items-center space-x-4">
           <div className="relative flex-1 max-w-sm">
@@ -186,28 +186,51 @@ export default function DashboardPage() {
           </TabsList>
 
           <TabsContent value="tables" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.isArray(tables) &&
-                tables.map((table, index) => (
-                  <Link href={`/table/${table.tableName}`} key={index}>
-                    <Card className="cursor-pointer hover:shadow-md transition-shadow h-full">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-2">
-                          <Database className="h-5 w-5 text-primary" />
-                          <CardTitle className="text-lg">{table.tableName}</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription>{table.database}</CardDescription>
-                        <div className="mt-3">
-                          <Badge variant="secondary">Table</Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-            </div>
-            {tables.length === 0 && (
+            {Array.isArray(tables) && tables.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tables</CardTitle>
+                  <CardDescription>Available database tables</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Table Name</TableHead>
+                        <TableHead>Database</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tables.map((table, index) => (
+                        <TableRow key={`table-${index}`}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center space-x-2">
+                              <Database className="h-4 w-4 text-primary" />
+                              <span>{table.tableName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{table.database || "Default"}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {table.isTemporary ? "Temporary" : "Table"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/table/${table.tableName}`}>
+                              <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                                View
+                              </Badge>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ) : (
               <div className="text-center py-12">
                 <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No tables found</h3>
@@ -234,7 +257,7 @@ export default function DashboardPage() {
                         <TableHead>Created By</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
-                        <TableHead>Last Executed</TableHead>
+                        {/* <TableHead>Last Executed</TableHead> */}
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -269,7 +292,7 @@ export default function DashboardPage() {
                               {segment.created_at ? new Date(segment.created_at).toLocaleDateString() : "Unknown date"}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          {/* <TableCell>
                             {segment.last_executed ? (
                               <div className="flex items-center text-sm text-muted-foreground">
                                 <Play className="h-4 w-4 mr-1" />
@@ -278,7 +301,7 @@ export default function DashboardPage() {
                             ) : (
                               <span className="text-sm text-muted-foreground">Never</span>
                             )}
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell>
                             <Link href={`/segment/${segment.segment_id}`}>
                               <Badge variant="outline" className="cursor-pointer hover:bg-accent">

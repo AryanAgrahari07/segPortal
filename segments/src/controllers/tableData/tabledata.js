@@ -111,14 +111,14 @@ const buildFilterCondition = (filterGroup) => {
  */
 exports.getTableData = async (req, res) => {
   try {
-    // Get pagination parameters
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 10;
+    // Get pagination parameters from query params or request body
+    const page = parseInt(req.body.page || req.query.page) || 1;
+    const pageSize = parseInt(req.body.pageSize || req.query.pageSize) || 10;
     const offset = (page - 1) * pageSize;
     
     // Get sorting parameters
-    const sortColumn = req.query.sortColumn || 'created_at';
-    const sortOrder = (req.query.sortOrder || 'desc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    const sortColumn = req.query.sortColumn || req.body.sortColumn || 'created_at';
+    const sortOrder = (req.query.sortOrder || req.body.sortOrder || 'desc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     
     // Get table name
     const { tableName } = req.params;
@@ -130,10 +130,50 @@ exports.getTableData = async (req, res) => {
       });
     }
 
-    console.log(req.body);
+    console.log("Request body for table data:", req.body);
     
     // Get filter data from request body
-    const { filterGroups, groupConditions } = req.body;
+    const { filterGroups, groupConditions, customSql } = req.body;
+    
+    // Check if custom SQL is provided
+    if (customSql) {
+      try {
+        // Execute custom SQL with pagination
+        // For direct SQL, we need to modify it to support pagination
+        
+        // Count total rows
+        const countSql = `SELECT COUNT(*) AS total FROM (${customSql}) AS countQuery`;
+        const countResult = await executeQuery(countSql);
+        const total = countResult[0].total;
+        
+        // Apply pagination to the SQL
+        const paginatedSql = `SELECT * FROM (${customSql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
+        const data = await executeQuery(paginatedSql);
+        
+        // Calculate total pages
+        const totalPages = Math.ceil(total / pageSize);
+        
+        return res.status(200).json({
+          success: true,
+          data: {
+            rows: data,
+            pagination: {
+              total,
+              page,
+              pageSize,
+              totalPages
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error executing custom SQL:', error);
+        return res.status(400).json({
+          success: false,
+          message: 'Error executing custom SQL',
+          error: error.message
+        });
+      }
+    }
     
     // Build the base SQL query
     let countQuery = `SELECT COUNT(*) AS total FROM ${tableName}`;
@@ -189,7 +229,8 @@ exports.getTableData = async (req, res) => {
     // Apply sorting and pagination to data query
     dataQuery += ` ORDER BY ${sortColumn} ${sortOrder} LIMIT ${pageSize} OFFSET ${offset}`;
     
-    console.log('Executing query:', dataQuery);
+    console.log('Executing count query:', countQuery);
+    console.log('Executing data query:', dataQuery);
     
     // Execute the count query first
     const countResult = await executeQuery(countQuery);

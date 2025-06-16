@@ -1,7 +1,16 @@
 "use client"
 
-import { useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import React from "react"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { formatValueForDisplay } from "@/lib/data-formatter"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react"
@@ -19,195 +28,80 @@ interface DataTableProps {
 }
 
 export function DataTable({ data, columns }: DataTableProps) {
-  const [currentPage, setCurrentPage] = useState(1)
-  const [searchTerm, setSearchTerm] = useState("")
-  const itemsPerPage = 10
+  // If there's no data, show a message
+  if (!data || data.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">No data available</p>
+      </div>
+    )
+  }
 
-  // Filter data based on search term
-  const filteredData = data.filter((row) =>
-    Object.values(row).some((value) => String(value).toLowerCase().includes(searchTerm.toLowerCase())),
-  )
+  // Get column names from the data if no columns were provided
+  const tableColumns = columns && columns.length > 0 
+    ? columns 
+    : Object.keys(data[0]).map(key => ({ name: key, type: typeof data[0][key], nullable: true }));
 
-  // Paginate filtered data
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage)
-
-  const formatCellValue = (value: any, columnType: string) => {
+  // Render cell with appropriate styling based on data type and value
+  const renderCell = (value: any, columnType: string) => {
+    const formattedValue = formatValueForDisplay(value, columnType);
+    
     if (value === null || value === undefined) {
-      return <span className="text-muted-foreground italic">null</span>
+      return <span className="text-muted-foreground italic">{formattedValue}</span>;
     }
 
-    switch (columnType) {
+    const normalizedType = columnType.toUpperCase();
+    
+    // Apply styling based on data type
+    switch (normalizedType) {
       case "BOOLEAN":
         return (
           <span
-            className={`px-2 py-1 rounded text-xs ${value ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+            className={`px-2 py-1 rounded text-xs ${
+              value ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+            }`}
           >
-            {String(value)}
+            {formattedValue}
           </span>
-        )
+        );
       case "TIMESTAMP":
-        return new Date(value).toLocaleString()
-      case "DECIMAL":
-        return typeof value === "number" ? value.toFixed(2) : value
+      case "DATE":
+      case "DATETIME":
+        return <span className="whitespace-nowrap">{formattedValue}</span>;
       default:
-        return String(value)
+        return formattedValue;
     }
-  }
-
-  const exportToCSV = () => {
-    if (!filteredData.length || !columns.length) {
-      return;
-    }
-    
-    // Create a filename with timestamp
-    const timestamp = new Date().toISOString().replace(/:/g, '-').substring(0, 19);
-    const filename = `data-export-${timestamp}.csv`;
-    
-    // Get column names for CSV headers
-    const columnNames = columns.map(col => col.name);
-    
-    // Export data using the data service
-    dataService.exportTableDataToCSV(filteredData, columnNames, filename);
   };
 
   return (
-    <div className="space-y-4">
-      {/* Search and Export */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search data..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value)
-                setCurrentPage(1) // Reset to first page when searching
-              }}
-              className="pl-10"
-            />
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {filteredData.length} of {data.length} records
-          </div>
-        </div>
-        
-        {/* Export Button */}
-        {/* {filteredData.length > 0 && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={exportToCSV}
-            className="flex items-center gap-1"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
-        )} */}
-      </div>
-
-      {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto max-h-96">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableHead key={column.name} className="whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{column.name}</span>
-                      <span className="text-xs text-muted-foreground font-normal">
-                        {column.type}
-                        {column.nullable && " (nullable)"}
-                      </span>
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
-                    {searchTerm ? "No matching records found" : "No data available"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedData.map((row, index) => (
-                  <TableRow key={index}>
-                    {columns.map((column) => (
-                      <TableCell key={column.name} className="whitespace-nowrap">
-                        {formatCellValue(row[column.name], column.type)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData.length)} of{" "}
-            {filteredData.length} results
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <div className="flex items-center space-x-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                const pageNum = i + 1
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={currentPage === pageNum ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(pageNum)}
-                    className="w-8 h-8 p-0"
-                  >
-                    {pageNum}
-                  </Button>
-                )
-              })}
-              {totalPages > 5 && (
-                <>
-                  <span className="text-muted-foreground">...</span>
-                  <Button
-                    variant={currentPage === totalPages ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(totalPages)}
-                    className="w-8 h-8 p-0"
-                  >
-                    {totalPages}
-                  </Button>
-                </>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+    <div className="overflow-auto max-h-[calc(100vh-25rem)]">
+      <Table>
+        <TableHeader className="sticky top-0 bg-background">
+          <TableRow>
+            {tableColumns.map((column) => (
+              <TableHead key={column.name} className="whitespace-nowrap">
+                <div className="flex items-center gap-1">
+                  <span>{column.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({column.type.toLowerCase()})
+                  </span>
+                </div>
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((row, index) => (
+            <TableRow key={`row-${index}`}>
+              {tableColumns.map((column) => (
+                <TableCell key={`${index}-${column.name}`} className="truncate max-w-xs">
+                  {renderCell(row[column.name], column.type)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }

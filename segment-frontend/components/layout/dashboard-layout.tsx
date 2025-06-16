@@ -35,10 +35,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-background transition-colors">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-[100%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-bold">Data Platform</h1>
+              <h1 className="text-xl font-bold">Segment Manager</h1>
               <nav className="flex space-x-4">
                 {navigation.map((item) => {
                   if (!item.show) return null
@@ -73,7 +73,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <main className="w-[100%] mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
     </div>
   )
 }

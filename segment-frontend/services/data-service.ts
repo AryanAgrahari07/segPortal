@@ -33,7 +33,7 @@ interface SegmentResponse {
   data: SegmentData;
 }
 
- export interface SegmentData {
+export interface SegmentData {
   segment_id: string;
   table_id: string;
   segment_name: string;
@@ -51,6 +51,7 @@ interface SegmentResponse {
   updated_at: string;
   last_executed: string | null;
   filter_groups: FilterGroup[];
+  groupConditions?: string[];
 }
 
 interface SegmentConfig {
@@ -132,10 +133,18 @@ class DataService {
     return this.makeRequest(`/table-metadata/${tableName}`)
   }
 
-  async getTableData(tableName: string, filters?: any) {
+  async getTableData(tableName: string, params?: {
+    filterGroups?: any[],
+    groupConditions?: string[],
+    customSql?: string,
+    page?: number,
+    pageSize?: number,
+    sortColumn?: string,
+    sortOrder?: 'asc' | 'desc'
+  }) {
     return this.makeRequest(`/table-data/${tableName}`, {
       method: "POST",
-      body: JSON.stringify(filters || {}),
+      body: JSON.stringify(params || {}),
     })
   }
 
@@ -192,7 +201,12 @@ class DataService {
     document.body.removeChild(link);
   }
 
-  async getTableDataWithSegment(tableName: string, segmentId: string) {
+  async getTableDataWithSegment(tableName: string, segmentId: string, pagination?: {
+    page: number,
+    pageSize: number,
+    sortColumn?: string,
+    sortOrder?: 'asc' | 'desc'
+  }) {
     try {
       // First get the segment to extract its filters
       const segmentResponse = await this.getSegmentById(segmentId, ["filter_groups", "filters"]);
@@ -203,14 +217,23 @@ class DataService {
       
       const segment = segmentResponse.data;
       
+      // Default pagination values
+      const paginationParams = {
+        page: pagination?.page || 1,
+        pageSize: pagination?.pageSize || 10,
+        sortColumn: pagination?.sortColumn,
+        sortOrder: pagination?.sortOrder
+      };
+      
       // Check if we have custom SQL
       if (segment.custom_sql) {
         // Use custom SQL directly
         return this.makeRequest(`/table-data/${tableName}`, {
           method: "POST",
           body: JSON.stringify({
-            rawSql: segment.custom_sql,
-            tableName: tableName
+            customSql: segment.custom_sql,
+            tableName: tableName,
+            ...paginationParams
           }),
         });
       } 
@@ -231,7 +254,11 @@ class DataService {
       // Use the filters to get table data
       return this.makeRequest(`/table-data/${tableName}`, {
         method: "POST",
-        body: JSON.stringify({ filterGroups }),
+        body: JSON.stringify({ 
+          filterGroups,
+          groupConditions: segment.groupConditions || ['AND'],
+          ...paginationParams
+        }),
       });
     } catch (error) {
       console.error("Error in getTableDataWithSegment:", error);

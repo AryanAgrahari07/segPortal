@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { Database, Play, Save, Plus, FilterIcon, Code, Calendar, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart } from "lucide-react"
+import { Database, Play, Save, Plus, FilterIcon, Code, Calendar, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { FilterGroupBuilder } from "@/components/segment/filter-group-builder"
 import { DataTable } from "@/components/segment/data-table"
@@ -57,6 +57,12 @@ interface SegmentData {
   endDate: string
   startTime: string
   endTime: string
+  segment_name?: string
+  segment_config?: any
+  filter_groups?: any[]
+  groupConditions?: string[]
+  custom_sql?: string
+  generated_sql?: string
 }
 
 interface TableMetadataResponse {
@@ -324,10 +330,19 @@ export default function TableDetailPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showReportOverview, setShowReportOverview] = useState(false)
   const [reportStats, setReportStats] = useState<any>({})
+  const [showDataTable, setShowDataTable] = useState(true)
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 10,
+    totalPages: 1,
+    total: 0
+  })
 
   useEffect(() => {
     loadTableData()
-  }, [tableName, segmentId])
+  }, [tableName, segmentId, pagination.page, pagination.pageSize])
 
   const loadTableData = async () => {
     try {
@@ -424,7 +439,7 @@ export default function TableDetailPage() {
             throw new Error("Invalid segment data received");
           }
 
-          const segment = segmentResponse.data;
+          const segment = segmentResponse.data as unknown as SegmentData;
 
           // Convert API filter groups to our format
           if (segment.filter_groups) {
@@ -435,7 +450,7 @@ export default function TableDetailPage() {
               isCollapsed: false,
               isEnabled: true,
               filters:
-                group.filters?.map((filter) => ({
+                group.filters?.map((filter: any) => ({
                   id: filter.id || `filter-${Date.now()}-${Math.random()}`,
                   column: filter.column_name || "",
                   operator: filter.filter_operator || "=",
@@ -445,6 +460,11 @@ export default function TableDetailPage() {
             }));
 
             setFilterGroups(convertedGroups as FilterGroup[]);
+            
+            // Set between-group conditions if available
+            if (segment.groupConditions && Array.isArray(segment.groupConditions)) {
+              setBetweenGroupConditions(segment.groupConditions);
+            }
             
             // Set segment data
             setSegmentData({
@@ -472,7 +492,7 @@ export default function TableDetailPage() {
               const filterQueryData = {
                 filterGroups: convertedGroups.map((group) => ({
                   logic_operator: group.condition,
-                  filters: group.filters.map((filter) => ({
+                  filters: group.filters.map((filter: any) => ({
                     type: 'condition',
                     column: filter.column,
                     operator: mapOperatorToBackend(filter.operator),
@@ -480,7 +500,12 @@ export default function TableDetailPage() {
                            filter.operator === 'IN' ? filter.value.split(',').map((v: string) => v.trim()) :
                            filter.value
                   }))
-                }))
+                })),
+                // Include between-group conditions if available
+                groupConditions: segment.groupConditions && Array.isArray(segment.groupConditions) ? 
+                  segment.groupConditions : ['AND'],
+                page: pagination.page,
+                pageSize: pagination.pageSize
               };
               
               console.log("Sending filter data to load table data:", filterQueryData);
@@ -489,9 +514,23 @@ export default function TableDetailPage() {
               
               // Process the response
               let tableRows = [];
+              let paginationData = {
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                total: 0,
+                totalPages: 1
+              };
+              
               if (tableDataResponse && typeof tableDataResponse === 'object') {
-                if (tableDataResponse.success && tableDataResponse.data && tableDataResponse.data.rows) {
-                  tableRows = tableDataResponse.data.rows;
+                if (tableDataResponse.success && tableDataResponse.data) {
+                  if (tableDataResponse.data.rows) {
+                    tableRows = tableDataResponse.data.rows;
+                  }
+                  
+                  // Extract pagination info
+                  if (tableDataResponse.data.pagination) {
+                    paginationData = tableDataResponse.data.pagination;
+                  }
                 } else if (tableDataResponse.rows) {
                   tableRows = tableDataResponse.rows;
                 } else if (Array.isArray(tableDataResponse)) {
@@ -500,6 +539,13 @@ export default function TableDetailPage() {
               }
               
               setTableData(Array.isArray(tableRows) ? tableRows : []);
+              setPagination(prevPagination => ({
+                ...prevPagination,
+                page: paginationData.page,
+                pageSize: paginationData.pageSize,
+                total: paginationData.total,
+                totalPages: paginationData.totalPages
+              }));
             } catch (dataError) {
               console.error("Error loading table data with segment filters:", dataError);
               setTableData([]);
@@ -511,8 +557,35 @@ export default function TableDetailPage() {
               
               // Load regular table data as fallback
               try {
-                const data = await dataService.getTableData(tableName);
-                setTableData(Array.isArray(data) ? data : []);
+                const data = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
+                
+                let tableRows = [];
+                let paginationData = {
+                  page: pagination.page,
+                  pageSize: pagination.pageSize,
+                  total: 0,
+                  totalPages: 1
+                };
+                
+                if (data && typeof data === 'object') {
+                  if (data.success && data.data) {
+                    tableRows = data.data.rows || [];
+                    paginationData = data.data.pagination || paginationData;
+                  } else if (data.rows) {
+                    tableRows = data.rows;
+                  } else if (Array.isArray(data)) {
+                    tableRows = data;
+                  }
+                }
+                
+                setTableData(Array.isArray(tableRows) ? tableRows : []);
+                setPagination(prevPagination => ({
+                  ...prevPagination,
+                  page: paginationData.page,
+                  pageSize: paginationData.pageSize,
+                  total: paginationData.total,
+                  totalPages: paginationData.totalPages
+                }));
               } catch (fallbackError) {
                 console.error("Error loading fallback table data:", fallbackError);
                 setTableData([]);
@@ -524,8 +597,35 @@ export default function TableDetailPage() {
             
             // Load regular table data as fallback
             try {
-              const data = await dataService.getTableData(tableName);
-              setTableData(Array.isArray(data) ? data : []);
+              const data = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
+              
+              let tableRows = [];
+              let paginationData = {
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                total: 0,
+                totalPages: 1
+              };
+              
+              if (data && typeof data === 'object') {
+                if (data.success && data.data) {
+                  tableRows = data.data.rows || [];
+                  paginationData = data.data.pagination || paginationData;
+                } else if (data.rows) {
+                  tableRows = data.rows;
+                } else if (Array.isArray(data)) {
+                  tableRows = data;
+                }
+              }
+              
+              setTableData(Array.isArray(tableRows) ? tableRows : []);
+              setPagination(prevPagination => ({
+                ...prevPagination,
+                page: paginationData.page,
+                pageSize: paginationData.pageSize,
+                total: paginationData.total,
+                totalPages: paginationData.totalPages
+              }));
             } catch (dataError) {
               console.error("Error loading fallback table data:", dataError);
               setTableData([]);
@@ -541,8 +641,35 @@ export default function TableDetailPage() {
 
           // Load regular table data as fallback
           try {
-            const data = await dataService.getTableData(tableName);
-            setTableData(Array.isArray(data) ? data : []);
+            const data = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
+            
+            let tableRows = [];
+            let paginationData = {
+              page: pagination.page,
+              pageSize: pagination.pageSize,
+              total: 0,
+              totalPages: 1
+            };
+            
+            if (data && typeof data === 'object') {
+              if (data.success && data.data) {
+                tableRows = data.data.rows || [];
+                paginationData = data.data.pagination || paginationData;
+              } else if (data.rows) {
+                tableRows = data.rows;
+              } else if (Array.isArray(data)) {
+                tableRows = data;
+              }
+            }
+            
+            setTableData(Array.isArray(tableRows) ? tableRows : []);
+            setPagination(prevPagination => ({
+              ...prevPagination,
+              page: paginationData.page,
+              pageSize: paginationData.pageSize,
+              total: paginationData.total,
+              totalPages: paginationData.totalPages
+            }));
           } catch (dataError) {
             console.error("Error loading fallback table data:", dataError);
             setTableData([]);
@@ -551,15 +678,27 @@ export default function TableDetailPage() {
       } else {
         // Load regular table data
         try {
-          const response = await dataService.getTableData(tableName);
+          const response = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
           console.log("Table data response:", response);
           
           // Handle nested response structure with rows property
           let tableRows = [];
+          let paginationData = {
+            page: pagination.page,
+            pageSize: pagination.pageSize,
+            total: 0,
+            totalPages: 1
+          };
+          
           if (response && typeof response === 'object') {
             if (response.success && response.data) {
               // Check if data has rows property
               tableRows = response.data.rows || response.data;
+              
+              // Extract pagination info
+              if (response.data.pagination) {
+                paginationData = response.data.pagination;
+              }
             } else if (response.rows) {
               // Direct rows property
               tableRows = response.rows;
@@ -572,6 +711,13 @@ export default function TableDetailPage() {
           
           console.log("Processed table rows:", tableRows);
           setTableData(Array.isArray(tableRows) ? tableRows : []);
+          setPagination(prevPagination => ({
+            ...prevPagination,
+            page: paginationData.page,
+            pageSize: paginationData.pageSize,
+            total: paginationData.total,
+            totalPages: paginationData.totalPages
+          }));
         } catch (dataError) {
           console.error("Error loading table data:", dataError);
           setTableData([]);
@@ -925,14 +1071,28 @@ export default function TableDetailPage() {
         // The backend will handle parsing the SQL
         const customResponse = await dataService.getTableData(tableName, { 
           customSql,
-          filterGroups: [] // Empty filter groups since we're using custom SQL
+          filterGroups: [],
+          page: pagination.page,
+          pageSize: pagination.pageSize
         });
         
         // Handle response
         let customTableRows: any[] = [];
+        let paginationData = {
+          page: pagination.page,
+          pageSize: pagination.pageSize,
+          total: 0,
+          totalPages: 1
+        };
+        
         if (customResponse && typeof customResponse === 'object') {
-          if (customResponse.success && customResponse.data && customResponse.data.rows) {
-            customTableRows = customResponse.data.rows;
+          if (customResponse.success && customResponse.data) {
+            customTableRows = customResponse.data.rows || [];
+            
+            // Extract pagination info
+            if (customResponse.data.pagination) {
+              paginationData = customResponse.data.pagination;
+            }
           } else if (customResponse.rows) {
             customTableRows = customResponse.rows;
           } else if (Array.isArray(customResponse)) {
@@ -941,6 +1101,13 @@ export default function TableDetailPage() {
         }
         
         setTableData(Array.isArray(customTableRows) ? customTableRows : []);
+        setPagination(prevPagination => ({
+          ...prevPagination,
+          page: paginationData.page,
+          pageSize: paginationData.pageSize,
+          total: paginationData.total,
+          totalPages: paginationData.totalPages
+        }));
         
         // Generate report stats
         const stats = generateReportStats(Array.isArray(customTableRows) ? customTableRows : [])
@@ -948,7 +1115,7 @@ export default function TableDetailPage() {
         
         toast({
           title: "Query Executed",
-          description: `Found ${customTableRows.length} records`,
+          description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
         });
       } else {
         // Use existing filter groups
@@ -974,7 +1141,9 @@ export default function TableDetailPage() {
               }))
             })),
           // Add the between-group conditions as an array
-          groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND']
+          groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
+          page: pagination.page,
+          pageSize: pagination.pageSize
         };
         
         console.log("Executing query with filters:", filterQueryData);
@@ -984,9 +1153,21 @@ export default function TableDetailPage() {
         
         // Handle response
         let filterTableRows: any[] = [];
+        let paginationData = {
+          page: pagination.page,
+          pageSize: pagination.pageSize,
+          total: 0,
+          totalPages: 1
+        };
+        
         if (filterResponse && typeof filterResponse === 'object') {
-          if (filterResponse.success && filterResponse.data && filterResponse.data.rows) {
-            filterTableRows = filterResponse.data.rows;
+          if (filterResponse.success && filterResponse.data) {
+            filterTableRows = filterResponse.data.rows || [];
+            
+            // Extract pagination info
+            if (filterResponse.data.pagination) {
+              paginationData = filterResponse.data.pagination;
+            }
           } else if (filterResponse.rows) {
             filterTableRows = filterResponse.rows;
           } else if (Array.isArray(filterResponse)) {
@@ -995,6 +1176,13 @@ export default function TableDetailPage() {
         }
         
         setTableData(Array.isArray(filterTableRows) ? filterTableRows : []);
+        setPagination(prevPagination => ({
+          ...prevPagination,
+          page: paginationData.page,
+          pageSize: paginationData.pageSize,
+          total: paginationData.total,
+          totalPages: paginationData.totalPages
+        }));
         
         // Generate report stats
         const stats = generateReportStats(Array.isArray(filterTableRows) ? filterTableRows : [])
@@ -1002,7 +1190,7 @@ export default function TableDetailPage() {
         
         toast({
           title: "Query Executed",
-          description: `Found ${filterTableRows.length} records`,
+          description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
         });
       }
     } catch (error: any) {
@@ -1015,6 +1203,24 @@ export default function TableDetailPage() {
     } finally {
       setExecuting(false);
     }
+  };
+
+  // Handle pagination changes
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPagination(prev => ({
+        ...prev,
+        page: newPage
+      }));
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPagination(prev => ({
+      ...prev,
+      page: 1, // Reset to first page when changing page size
+      pageSize: newSize
+    }));
   };
 
   // Update the mapOperatorToBackend function to match the backend's operator names
@@ -1211,39 +1417,39 @@ export default function TableDetailPage() {
   const renderReportOverview = () => {
     if (!reportStats.totalRecords) {
       return (
-        <div className="text-center py-2 text-muted-foreground text-xs">
+        <div className="text-center py-4 text-muted-foreground text-sm">
           No data available for report overview.
         </div>
       )
     }
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {/* Compact Overview Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {/* Numeric Columns */}
           {Object.entries(reportStats.numericColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-2">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-medium flex items-center truncate" title={colName}>
-                  <BarChart className="h-3 w-3 mr-1 text-primary" />
+            <div key={colName} className="bg-muted/20 rounded-md p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                  <BarChart className="h-4 w-4 mr-2 text-primary" />
                   {colName}
                 </h4>
               </div>
-              <div className="grid grid-cols-2 gap-x-2 text-xs">
-                <div className="flex justify-between">
+              <div className="grid grid-cols-2 gap-x-4 text-sm">
+                <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Avg:</span>
                   <span className="font-medium">{stats.avg}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Sum:</span>
                   <span className="font-medium">{stats.sum}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Min:</span>
                   <span className="font-medium">{stats.min}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Max:</span>
                   <span className="font-medium">{stats.max}</span>
                 </div>
@@ -1253,50 +1459,50 @@ export default function TableDetailPage() {
 
           {/* Categorical Columns */}
           {Object.entries(reportStats.categoricalColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-2">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-medium flex items-center truncate" title={colName}>
-                  <PieChart className="h-3 w-3 mr-1 text-primary" />
+            <div key={colName} className="bg-muted/20 rounded-md p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                  <PieChart className="h-4 w-4 mr-2 text-primary" />
                   {colName}
                 </h4>
-                <span className="text-[10px] text-muted-foreground">{stats.uniqueValues} unique</span>
+                <span className="text-sm text-muted-foreground">{stats.uniqueValues} unique</span>
               </div>
               {stats.topValues.slice(0, 2).length > 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {stats.topValues.slice(0, 2).map((tv: any, idx: number) => (
-                    <div key={idx} className="flex items-center text-[10px]">
-                      <div className="w-14 truncate mr-1" title={tv.value}>
+                    <div key={idx} className="flex items-center text-sm">
+                      <div className="w-16 truncate mr-2" title={tv.value}>
                         {tv.value}
                       </div>
-                      <div className="flex-grow bg-muted rounded-full h-1.5 mr-1">
+                      <div className="flex-grow bg-muted rounded-full h-2 mr-2">
                         <div 
-                          className="bg-primary h-1.5 rounded-full" 
+                          className="bg-primary h-2 rounded-full" 
                           style={{ width: `${tv.percentage}%` }}
                         ></div>
                       </div>
-                      <div className="text-[10px] w-7 text-right text-muted-foreground font-medium">
+                      <div className="text-sm w-12 text-right text-muted-foreground font-medium">
                         {tv.percentage}%
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-[10px] text-muted-foreground text-center py-1">No frequent values</div>
+                <div className="text-sm text-muted-foreground text-center py-2">No frequent values</div>
               )}
             </div>
           ))}
 
           {/* Date Columns */}
           {Object.entries(reportStats.dateColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-2">
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-medium flex items-center truncate" title={colName}>
-                  <Calendar className="h-3 w-3 mr-1 text-primary" />
+            <div key={colName} className="bg-muted/20 rounded-md p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                  <Calendar className="h-4 w-4 mr-2 text-primary" />
                   {colName}
                 </h4>
-                <span className="text-[10px] text-muted-foreground">{stats.dateRange} days</span>
+                <span className="text-sm text-muted-foreground">{stats.dateRange} days</span>
               </div>
-              <div className="grid grid-cols-2 gap-1 text-[10px]">
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex flex-col">
                   <span className="text-muted-foreground">First:</span>
                   <span className="font-medium truncate" title={stats.minDate}>{stats.minDate}</span>
@@ -1313,10 +1519,95 @@ export default function TableDetailPage() {
     )
   }
 
+  // Render pagination controls
+  const renderPagination = () => {
+    const { page, pageSize, total, totalPages } = pagination;
+    const startRecord = ((page - 1) * pageSize) + 1;
+    const endRecord = Math.min(page * pageSize, total);
+    
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 px-4">
+        <div className="text-sm text-muted-foreground">
+          Showing {startRecord} to {endRecord} of {total} records
+        </div>
+        <div className="flex items-center gap-2">
+          <Select 
+            value={pageSize.toString()} 
+            onValueChange={(value) => handlePageSizeChange(parseInt(value))}
+          >
+            <SelectTrigger className="w-[110px] h-8">
+              <SelectValue placeholder="Rows per page" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10 per page</SelectItem>
+              <SelectItem value="20">20 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+              <SelectItem value="100">100 per page</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="flex items-center gap-1">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0" 
+              onClick={() => handlePageChange(1)}
+              disabled={page === 1}
+            >
+              <span className="sr-only">First Page</span>
+              <ChevronFirst className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0" 
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+            >
+              <span className="sr-only">Previous Page</span>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <span className="text-sm px-2">
+              Page {page} of {totalPages}
+            </span>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0" 
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page >= totalPages}
+            >
+              <span className="sr-only">Next Page</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0" 
+              onClick={() => handlePageChange(totalPages)}
+              disabled={page >= totalPages}
+            >
+              <span className="sr-only">Last Page</span>
+              <ChevronLast className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Toggle between Data Insights and Table
+  const toggleView = (showInsights: boolean) => {
+    setShowReportOverview(showInsights);
+    setShowDataTable(!showInsights);
+  };
+
   return (
     <DashboardLayout>
       <TooltipProvider>
-        <div className="space-y-6">
+        <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between py-2 mb-4 border-b border-primary/10">
             <div className="flex items-center space-x-3">
@@ -1364,14 +1655,14 @@ export default function TableDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar - Filters */}
-            <div className="lg:col-span-1 space-y-4">
+          <div className="flex flex-1 gap-6 h-[calc(100vh-12rem)] overflow-hidden">
+            {/* Left Sidebar - Filters - 35% width */}
+            <div className="w-[30%] flex-shrink-0 flex flex-col h-full border-r border-primary/10 pr-4 overflow-hidden">
               {/* Filter Groups Header */}
-              <Card className={cn("border", gradientCardStyles({ variant: "primary" }))}>
-                <CardHeader>
+              <Card className={cn("border mb-4 sticky top-0 z-10", gradientCardStyles({ variant: "primary" }))}>
+                <CardHeader className="py-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center space-x-2">
+                    <CardTitle className="flex items-center space-x-2 text-base">
                       <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center">
                         <Layers className="h-3.5 w-3.5 text-primary" />
                       </div>
@@ -1397,8 +1688,8 @@ export default function TableDetailPage() {
                 </CardHeader>
               </Card>
 
-              {/* Filter Groups */}
-              <div className="space-y-4">
+              {/* Filter Groups - Scrollable */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-4">
                 {filterGroups.length === 0 ? (
                   <Card className="border-dashed border-primary/20 bg-primary/5">
                     <CardContent className="text-center py-12">
@@ -1447,17 +1738,17 @@ export default function TableDetailPage() {
                 )}
               </div>
 
-              {/* Timing Configuration */}
-              <Card className="border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-blue-600/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
+              {/* Timing Configuration - Sticky Bottom */}
+              <Card className="border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-blue-600/10 mt-4 sticky bottom-0">
+                <CardHeader className="py-3">
+                  <CardTitle className="flex items-center text-base">
                     <div className="h-6 w-6 rounded-md bg-blue-500/10 flex items-center justify-center mr-2">
                       <Calendar className="h-3.5 w-3.5 text-blue-500" />
                     </div>
                     Execution Timing
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pb-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label htmlFor="startDate" className="text-xs">
@@ -1514,8 +1805,8 @@ export default function TableDetailPage() {
               </Card>
             </div>
 
-            {/* Right Side - Data View */}
-            <div className="lg:col-span-3 space-y-4">
+            {/* Right Side - Data View - 65% width */}
+            <div className="w-[70%] overflow-y-auto space-y-4">
               {showSqlEditor && (
                 <SqlEditor
                   sql={customSql || generateSqlFromFilters()}
@@ -1529,23 +1820,23 @@ export default function TableDetailPage() {
               {tableData && tableData.length > 0 && (
                 <Card className="border border-secondary/20 bg-gradient-to-br from-secondary/5 to-secondary/10">
                   <div className="px-4 py-3 flex items-center justify-between border-b border-secondary/20">
-                    <h3 className="text-sm flex items-center font-medium">
+                    <h3 className="text-base flex items-center font-medium">
                       <div className="h-6 w-6 rounded-md bg-secondary/10 flex items-center justify-center mr-2">
-                        <BarChart className="h-3.5 w-3.5 text-secondary" />
+                        <BarChart className="h-4 w-4 text-secondary" />
                       </div>
                       Data Insights
                     </h3>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="h-7 px-3 text-xs border-primary/20 hover:border-primary/40 hover:bg-primary/5"
-                      onClick={() => setShowReportOverview(!showReportOverview)}
+                      className="h-8 px-4 text-sm border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+                      onClick={() => toggleView(!showReportOverview)}
                     >
-                      {showReportOverview ? "Hide" : "Show"}
+                      {showReportOverview ? "Show Table" : "Show Insights"}
                     </Button>
                   </div>
                   {showReportOverview && (
-                    <div className="p-3">
+                    <div className="p-5">
                       {renderReportOverview()}
                     </div>
                   )}
@@ -1565,8 +1856,12 @@ export default function TableDetailPage() {
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.total}</span>
+                          <span className="text-xs text-muted-foreground">total records</span>
+                        </div>
+                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{tableData?.length || 0}</span>
-                          <span className="text-xs text-muted-foreground">records</span>
+                          <span className="text-xs text-muted-foreground">current page</span>
                         </div>
                         <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{columns?.length || 0}</span>
@@ -1595,16 +1890,16 @@ export default function TableDetailPage() {
                             className="flex items-center gap-1 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/5"
                           >
                             <Download className="h-4 w-4 text-green-500" />
-                            Export CSV
+                            Export Page
                           </Button>
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => setShowReportOverview(!showReportOverview)}
+                            onClick={() => toggleView(!showReportOverview)}
                             className="flex items-center gap-1 bg-primary/90 hover:bg-primary text-white dark:text-white"
                           >
                             <BarChart className="h-4 w-4" />
-                            {showReportOverview ? "Hide" : "Show"} Insights
+                            {showReportOverview ? "Show Table" : "Show Insights"}
                           </Button>
                         </div>
                       )}
@@ -1612,7 +1907,12 @@ export default function TableDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <DataTable data={tableData || []} columns={columns || []} />
+                  {showDataTable && (
+                    <>
+                      <DataTable data={tableData || []} columns={columns || []} />
+                      {renderPagination()}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>

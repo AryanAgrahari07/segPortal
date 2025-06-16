@@ -6,7 +6,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 const QUERY_TIMEOUT_MS = 30000; // 30 seconds
 
-// ===== Connection Manager =====
+// ==== Connection Manager ====
 class DatabricksSQLManager {
   constructor() {
     this.client = new DBSQLClient();

@@ -7,6 +7,7 @@ const tableDefinition = {
       group_name STRING NOT NULL,
       group_order INT NOT NULL,
       group_condition STRING,
+      between_group_condition STRING,
       description STRING,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),

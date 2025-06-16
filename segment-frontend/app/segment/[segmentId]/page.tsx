@@ -194,12 +194,12 @@ export default function SegmentDetailPage() {
                 <h3 className="text-sm font-medium text-muted-foreground">Created At</h3>
                 <p>{new Date(segment.created_at).toLocaleString()}</p>
               </div>
-              {segment.last_executed && (
+              {/* {segment.last_executed && (
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Last Executed</h3>
                   <p>{new Date(segment.last_executed).toLocaleString()}</p>
                 </div>
-              )}
+              )} */}
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Filter Summary</h3>
                 <p>
