@@ -26,6 +26,7 @@ exports.getAllSegments = async (req, res) => {
   try {
     const query = `
       SELECT * FROM segments
+      WHERE is_active = TRUE
       ORDER BY created_at DESC
     `;
 
@@ -210,6 +211,7 @@ exports.getSegmentById = async (req, res) => {
     const segmentQuery = `
       SELECT * FROM segments
       WHERE segment_id = ${escapeSQLString(segmentId)}
+      AND is_active = TRUE
     `;
 
     const segmentResult = await executeQuery(segmentQuery);
@@ -510,39 +512,24 @@ exports.deleteSegment = async (req, res) => {
       });
     }
 
-    // First delete all filters associated with this segment's filter groups
-    const deleteFiltersQuery = `
-      DELETE FROM filters
-      WHERE filter_group_id IN (
-        SELECT id FROM filter_groups
-        WHERE segment_id = ${escapeSQLString(segmentId)}
-      )
-    `;
-    await executeQuery(deleteFiltersQuery);
-
-    // Then delete all filter groups
-    const deleteGroupsQuery = `
-      DELETE FROM filter_groups
+    // Soft delete by setting is_active to FALSE
+    const softDeleteQuery = `
+      UPDATE segments
+      SET is_active = FALSE,
+          updated_at = CURRENT_TIMESTAMP()
       WHERE segment_id = ${escapeSQLString(segmentId)}
     `;
-    await executeQuery(deleteGroupsQuery);
-
-    // Finally delete the segment
-    const deleteSegmentQuery = `
-      DELETE FROM segments
-      WHERE segment_id = ${escapeSQLString(segmentId)}
-    `;
-    await executeQuery(deleteSegmentQuery);
+    await executeQuery(softDeleteQuery);
 
     return res.status(200).json({
       success: true,
-      message: 'Segment and associated filter groups and filters deleted successfully'
+      message: 'Segment deactivated successfully'
     });
   } catch (error) {
-    console.error('Error deleting segment:', error);
+    console.error('Error deactivating segment:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to delete segment',
+      message: 'Failed to deactivate segment',
       error: error.message
     });
   }

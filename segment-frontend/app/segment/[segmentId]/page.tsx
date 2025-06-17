@@ -161,9 +161,9 @@ export default function SegmentDetailPage() {
               <Edit className="h-4 w-4 mr-2" />
               Edit Segment
             </Button>
-            <Button onClick={editSegment} >
+            {/* <Button onClick={editSegment} >
                <Play className="h-4 w-4 mr-2" /> Execute Segment
-            </Button>
+            </Button> */}
             <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
@@ -314,7 +314,7 @@ export default function SegmentDetailPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete the segment &quot;{segment.segment_name}&quot;. This action cannot be
+                This will delete the segment &quot;{segment.segment_name}&quot;. This action cannot be
                 undone.
               </AlertDialogDescription>
             </AlertDialogHeader>

@@ -15,6 +15,7 @@ const tableDefinition = {
       custom_sql STRING,
       is_template BOOLEAN DEFAULT FALSE,
       is_saved_table BOOLEAN DEFAULT FALSE,
+      is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
       last_executed TIMESTAMP,

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Trash2, Plus, Settings, ChevronDown, ChevronRight, GripVertical, Copy, Eye, EyeOff } from "lucide-react"
+import { Trash2, Plus, Settings, ChevronDown, ChevronRight, GripVertical, Copy, Eye, EyeOff, ListFilter } from "lucide-react"
 import { FilterBuilder } from "./filter-builder"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -41,9 +41,10 @@ interface FilterGroupBuilderProps {
   onUpdate: (updates: Partial<FilterGroup>) => void
   onRemove: () => void
   onDuplicate?: () => void
+  rowCount?: number
 }
 
-export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDuplicate }: FilterGroupBuilderProps) {
+export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDuplicate, rowCount }: FilterGroupBuilderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(group.name)
   const [isCollapsed, setIsCollapsed] = useState(group.isCollapsed || false)
@@ -160,6 +161,21 @@ export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDupli
                     <TooltipContent>Edit group name</TooltipContent>
                   </Tooltip>
                 </div>
+
+                {/* Row Count Badge */}
+                {rowCount !== undefined && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge className="rounded-full px-2 py-0.5 bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30 ml-1 flex items-center gap-1">
+                        <ListFilter className="h-3 w-3" />
+                        <span>{rowCount.toLocaleString()} rows</span>
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Total rows after applying all filter groups up to this one
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
 
               {/* Second Line: Condition and Delete */}
@@ -204,14 +220,28 @@ export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDupli
               </div>
             </div>
 
-            {/* Collapsed Summary */}
+            {/* Display a compact preview when collapsed */}
             {isCollapsed && group.filters.length > 0 && (
-              <div className="mt-2 text-xs text-muted-foreground">
-                <div className="flex flex-wrap gap-1">
-                  {group.condition === "NOT" && <span className="font-medium text-red-600 dark:text-red-400">NOT</span>}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                <div className="flex items-center">
+                  <Badge variant="outline" className="mr-2">
+                    {group.filters.length} filters
+                  </Badge>
+                  
+                  {/* Add row count to collapsed view */}
+                  {rowCount !== undefined && (
+                    <Badge className="rounded-full px-2 py-0.5 bg-green-500/20 text-green-700 dark:text-green-300 flex items-center gap-1">
+                      <ListFilter className="h-3 w-3" />
+                      <span>{rowCount.toLocaleString()} rows</span>
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1">
+                  {/* Show first few filters as preview */}
                   {group.filters.slice(0, 3).map((filter, index) => (
-                    <span key={filter.id} className="inline-flex items-center">
-                      <Badge variant="outline" className="text-xs">
+                    <span key={filter.id} className="flex items-center">
+                      <Badge variant="outline" className="font-mono">
                         {filter.column} {filter.operator} {filter.value}
                       </Badge>
                       {index < Math.min(group.filters.length - 1, 2) && (

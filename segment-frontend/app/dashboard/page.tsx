@@ -1,18 +1,29 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Database, Filter, Search, Calendar, User, Play } from "lucide-react"
+import { Loader2, Database, Filter, Search, Calendar, User, Play, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { dataService } from "@/services/data-service"
 import Link from "next/link"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Table {
   tableName: string
@@ -30,11 +41,18 @@ interface Segment {
   last_executed?: string
 }
 
+interface PaginationState {
+  currentPage: number
+  pageSize: number
+}
+
 export default function DashboardPage() {
   const [tables, setTables] = useState<Table[]>([])
   const [segments, setSegments] = useState<Segment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [tablesPagination, setTablesPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
+  const [segmentsPagination, setSegmentsPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
   const { toast } = useToast()
   const { user } = useAuth()
   const searchParams = useSearchParams()
@@ -135,17 +153,268 @@ export default function DashboardPage() {
     }
   }
 
-  // const filteredTables = tables.filter(
-  //   (table) =>
-  //     // table.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //     table.description.toLowerCase().includes(searchTerm.toLowerCase()) ,
-  // )
+  // Filter tables by search term
+  const filteredTables = useMemo(() => {
+    return tables.filter((table) =>
+      table.tableName.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [tables, searchTerm])
 
-  // const filteredSegments = segments.filter(
-  //   (segment) =>
-  //     segment.segment_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //     (segment.description && segment.description.toLowerCase().includes(searchTerm.toLowerCase())),
-  // )
+  // Filter segments by search term
+  const filteredSegments = useMemo(() => {
+    return segments.filter((segment) =>
+      segment.segment_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (segment.description && segment.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+  }, [segments, searchTerm])
+
+  // Calculate paginated data for tables
+  const paginatedTables = useMemo(() => {
+    const startIndex = (tablesPagination.currentPage - 1) * tablesPagination.pageSize
+    const endIndex = startIndex + tablesPagination.pageSize
+    return filteredTables.slice(startIndex, endIndex)
+  }, [filteredTables, tablesPagination])
+
+  // Calculate paginated data for segments
+  const paginatedSegments = useMemo(() => {
+    const startIndex = (segmentsPagination.currentPage - 1) * segmentsPagination.pageSize
+    const endIndex = startIndex + segmentsPagination.pageSize
+    return filteredSegments.slice(startIndex, endIndex)
+  }, [filteredSegments, segmentsPagination])
+
+  // Calculate total pages for tables
+  const totalTablesPages = useMemo(() => {
+    return Math.ceil(filteredTables.length / tablesPagination.pageSize)
+  }, [filteredTables, tablesPagination.pageSize])
+
+  // Calculate total pages for segments
+  const totalSegmentsPages = useMemo(() => {
+    return Math.ceil(filteredSegments.length / segmentsPagination.pageSize)
+  }, [filteredSegments, segmentsPagination.pageSize])
+
+  // Handle page change for tables
+  const handleTablesPageChange = (page: number) => {
+    setTablesPagination((prev) => ({ ...prev, currentPage: page }))
+  }
+
+  // Handle page change for segments
+  const handleSegmentsPageChange = (page: number) => {
+    setSegmentsPagination((prev) => ({ ...prev, currentPage: page }))
+  }
+
+  // Handle page size change for tables
+  const handleTablesPageSizeChange = (size: number) => {
+    setTablesPagination({ currentPage: 1, pageSize: size })
+  }
+
+  // Handle page size change for segments
+  const handleSegmentsPageSizeChange = (size: number) => {
+    setSegmentsPagination({ currentPage: 1, pageSize: size })
+  }
+
+  // Render pagination controls for tables
+  const renderTablesPagination = () => {
+    const { currentPage, pageSize } = tablesPagination
+    const startRecord = ((currentPage - 1) * pageSize) + 1
+    const endRecord = Math.min(currentPage * pageSize, filteredTables.length)
+    
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pb-2">
+        <div className="text-sm text-muted-foreground">
+          Showing {startRecord}-{endRecord} of {filteredTables.length} tables
+        </div>
+        <div className="flex items-center gap-2">
+          <Select 
+            value={pageSize.toString()} 
+            onValueChange={(value) => handleTablesPageSizeChange(parseInt(value))}
+          >
+            <SelectTrigger className="w-[110px] h-8">
+              <SelectValue placeholder="Rows per page" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5 per page</SelectItem>
+              <SelectItem value="10">10 per page</SelectItem>
+              <SelectItem value="20">20 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => handleTablesPageChange(currentPage - 1)}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {/* First page */}
+              {currentPage > 2 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleTablesPageChange(1)}>1</PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Ellipsis */}
+              {currentPage > 3 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+              
+              {/* Previous page */}
+              {currentPage > 1 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleTablesPageChange(currentPage - 1)}>
+                    {currentPage - 1}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Current page */}
+              <PaginationItem>
+                <PaginationLink isActive>{currentPage}</PaginationLink>
+              </PaginationItem>
+              
+              {/* Next page */}
+              {currentPage < totalTablesPages && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleTablesPageChange(currentPage + 1)}>
+                    {currentPage + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Ellipsis */}
+              {currentPage < totalTablesPages - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+              
+              {/* Last page */}
+              {currentPage < totalTablesPages - 1 && totalTablesPages > 1 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleTablesPageChange(totalTablesPages)}>
+                    {totalTablesPages}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => handleTablesPageChange(currentPage + 1)}
+                  className={currentPage >= totalTablesPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    )
+  }
+
+  // Render pagination controls for segments
+  const renderSegmentsPagination = () => {
+    const { currentPage, pageSize } = segmentsPagination
+    const startRecord = ((currentPage - 1) * pageSize) + 1
+    const endRecord = Math.min(currentPage * pageSize, filteredSegments.length)
+    
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pb-2">
+        <div className="text-sm text-muted-foreground">
+          Showing {startRecord}-{endRecord} of {filteredSegments.length} segments
+        </div>
+        <div className="flex items-center gap-2">
+          <Select 
+            value={pageSize.toString()} 
+            onValueChange={(value) => handleSegmentsPageSizeChange(parseInt(value))}
+          >
+            <SelectTrigger className="w-[110px] h-8">
+              <SelectValue placeholder="Rows per page" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5 per page</SelectItem>
+              <SelectItem value="10">10 per page</SelectItem>
+              <SelectItem value="20">20 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => handleSegmentsPageChange(currentPage - 1)}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              
+              {/* First page */}
+              {currentPage > 2 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleSegmentsPageChange(1)}>1</PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Ellipsis */}
+              {currentPage > 3 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+              
+              {/* Previous page */}
+              {currentPage > 1 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleSegmentsPageChange(currentPage - 1)}>
+                    {currentPage - 1}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Current page */}
+              <PaginationItem>
+                <PaginationLink isActive>{currentPage}</PaginationLink>
+              </PaginationItem>
+              
+              {/* Next page */}
+              {currentPage < totalSegmentsPages && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleSegmentsPageChange(currentPage + 1)}>
+                    {currentPage + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              {/* Ellipsis */}
+              {currentPage < totalSegmentsPages - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+              
+              {/* Last page */}
+              {currentPage < totalSegmentsPages - 1 && totalSegmentsPages > 1 && (
+                <PaginationItem>
+                  <PaginationLink onClick={() => handleSegmentsPageChange(totalSegmentsPages)}>
+                    {totalSegmentsPages}
+                  </PaginationLink>
+                </PaginationItem>
+              )}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => handleSegmentsPageChange(currentPage + 1)}
+                  className={currentPage >= totalSegmentsPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -160,13 +429,6 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Data Platform</h1>
-            <p className="text-muted-foreground">Welcome back, {user?.first_name}! Manage your tables and segments.</p>
-          </div>
-        </div> */}
-
         <div className="flex items-center space-x-4">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -186,7 +448,7 @@ export default function DashboardPage() {
           </TabsList>
 
           <TabsContent value="tables" className="space-y-4">
-            {Array.isArray(tables) && tables.length > 0 ? (
+            {filteredTables.length > 0 ? (
               <Card>
                 <CardHeader>
                   <CardTitle>Tables</CardTitle>
@@ -203,7 +465,7 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tables.map((table, index) => (
+                      {paginatedTables.map((table, index) => (
                         <TableRow key={`table-${index}`}>
                           <TableCell className="font-medium">
                             <div className="flex items-center space-x-2">
@@ -228,6 +490,8 @@ export default function DashboardPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  
+                  {filteredTables.length > 0 && renderTablesPagination()}
                 </CardContent>
               </Card>
             ) : (
@@ -242,7 +506,7 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="segments" className="space-y-4">
-            {Array.isArray(segments) && segments.length > 0 ? (
+            {filteredSegments.length > 0 ? (
               <Card>
                 <CardHeader>
                   <CardTitle>Segments</CardTitle>
@@ -257,12 +521,11 @@ export default function DashboardPage() {
                         <TableHead>Created By</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
-                        {/* <TableHead>Last Executed</TableHead> */}
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {segments.map((segment) => (
+                      {paginatedSegments.map((segment) => (
                         <TableRow key={segment.segment_id || `segment-${Math.random()}`}>
                           <TableCell className="font-medium">
                             <div className="flex items-center space-x-2">
@@ -292,16 +555,6 @@ export default function DashboardPage() {
                               {segment.created_at ? new Date(segment.created_at).toLocaleDateString() : "Unknown date"}
                             </div>
                           </TableCell>
-                          {/* <TableCell>
-                            {segment.last_executed ? (
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Play className="h-4 w-4 mr-1" />
-                                {new Date(segment.last_executed).toLocaleDateString()}
-                              </div>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">Never</span>
-                            )}
-                          </TableCell> */}
                           <TableCell>
                             <Link href={`/segment/${segment.segment_id}`}>
                               <Badge variant="outline" className="cursor-pointer hover:bg-accent">
@@ -313,6 +566,8 @@ export default function DashboardPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  
+                  {filteredSegments.length > 0 && renderSegmentsPagination()}
                 </CardContent>
               </Card>
             ) : (

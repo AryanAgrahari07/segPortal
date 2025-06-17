@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { Database, Play, Save, Plus, FilterIcon, Code, Calendar, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast } from "lucide-react"
+import { Database, Play, Save, Plus, FilterIcon, Code, Calendar as CalendarIcon, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Clock, ChevronDown } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { FilterGroupBuilder } from "@/components/segment/filter-group-builder"
 import { DataTable } from "@/components/segment/data-table"
@@ -34,6 +34,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+// Add calendar and popover imports
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+// Import required types from react-day-picker
+import { DayPicker, CaptionProps } from "react-day-picker"
 
 interface Column {
   name: string
@@ -300,6 +310,171 @@ const parseWhereClauseToFilters = (sql: string): any => {
   }
 };
 
+// Add a DatePicker component function at the appropriate place, before the TableDetailPage component
+function DatePicker({ 
+  date, 
+  setDate, 
+  className 
+}: { 
+  date: string, 
+  setDate: (date: string) => void,
+  className?: string 
+}) {
+  // Handle converting string date to Date object for Calendar
+  const selectedDate = date ? new Date(date) : undefined;
+  const [month, setMonth] = useState<Date | undefined>(selectedDate || new Date());
+  
+  // Generate years for dropdown (10 years before and after current year)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
+  // Handle date selection
+  const handleSelect = (newDate: Date | undefined) => {
+    if (newDate) {
+      // Format date as YYYY-MM-DD
+      const formattedDate = newDate.toISOString().split('T')[0];
+      setDate(formattedDate);
+    }
+  };
+
+  // Handle year change
+  const handleYearChange = (year: string) => {
+    const newDate = new Date(month || new Date());
+    newDate.setFullYear(parseInt(year));
+    setMonth(newDate);
+  };
+
+  // Format date for display
+  const formatDate = (date: Date): string => {
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            "w-full justify-start text-left font-normal h-9 border-blue-500/20 focus-visible:ring-blue-500/30",
+            !date && "text-muted-foreground",
+            className
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+          {date ? formatDate(selectedDate!) : <span>Pick a date</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <div className="p-3 border-b border-border/20 flex justify-between items-center">
+          <span className="text-sm font-medium">Go to year</span>
+          <Select value={(month?.getFullYear() || currentYear).toString()} onValueChange={handleYearChange}>
+            <SelectTrigger className="h-8 w-[5rem] px-2 text-xs border-blue-500/20 focus-visible:ring-blue-500/30">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((year) => (
+                <SelectItem key={year} value={year.toString()} className="text-xs">
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleSelect}
+          defaultMonth={month}
+          onMonthChange={setMonth}
+          initialFocus
+          className="border-none shadow-none"
+          classNames={{
+            caption: "flex justify-center py-2 relative items-center",
+            caption_label: "text-sm font-medium",
+            cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+            day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/20",
+            day_selected: "bg-blue-500 text-white hover:bg-blue-400 hover:text-white focus:bg-blue-500 focus:text-white",
+            day_today: "bg-blue-100 text-blue-700 dark:bg-blue-800/30 dark:text-blue-300",
+            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-blue-500"
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Add a TimePicker component
+function TimePicker({
+  time,
+  setTime,
+  className
+}: {
+  time: string,
+  setTime: (time: string) => void,
+  className?: string
+}) {
+  // Parse current time into hours and minutes
+  const [hours, minutes] = time ? time.split(":").map(Number) : [0, 0];
+
+  // Handle hour and minute changes
+  const handleHourChange = (newHour: string) => {
+    const formattedHour = newHour.padStart(2, '0');
+    const formattedMinute = minutes.toString().padStart(2, '0');
+    setTime(`${formattedHour}:${formattedMinute}`);
+  };
+
+  const handleMinuteChange = (newMinute: string) => {
+    const formattedHour = hours.toString().padStart(2, '0');
+    const formattedMinute = newMinute.padStart(2, '0');
+    setTime(`${formattedHour}:${formattedMinute}`);
+  };
+
+  // Generate hour and minute options
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+  return (
+    <div className={cn("flex items-center gap-1", className)}>
+      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-blue-500/20 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2">
+        <Clock className="mr-2 h-4 w-4 text-blue-500" />
+        <div className="flex items-center">
+          <Select value={hours.toString().padStart(2, '0')} onValueChange={handleHourChange}>
+            <SelectTrigger className="w-[4rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+              <SelectValue placeholder="HH" />
+            </SelectTrigger>
+            <SelectContent>
+              {hourOptions.map((hour) => (
+                <SelectItem key={hour} value={hour}>
+                  {hour}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="mx-1">:</span>
+          <Select value={minutes.toString().padStart(2, '0')} onValueChange={handleMinuteChange}>
+            <SelectTrigger className="w-[4rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+              <SelectValue placeholder="MM" />
+            </SelectTrigger>
+            <SelectContent>
+              {minuteOptions.map((minute) => (
+                <SelectItem key={minute} value={minute}>
+                  {minute}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TableDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -331,6 +506,7 @@ export default function TableDetailPage() {
   const [showReportOverview, setShowReportOverview] = useState(false)
   const [reportStats, setReportStats] = useState<any>({})
   const [showDataTable, setShowDataTable] = useState(true)
+  const [filterGroupRowCounts, setFilterGroupRowCounts] = useState<Record<string, number>>({})
   
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -923,42 +1099,130 @@ export default function TableDetailPage() {
         totalRecords: data.length,
         numericColumns: {},
         categoricalColumns: {},
-        dateColumns: {}
+        dateColumns: {},
+        summary: {
+          missingValues: {},
+          correlations: [],
+          mostCommonValues: [],
+          outliers: [],
+          distributions: {},
+          trends: {}
+        }
       }
 
-      // Process only up to 5 columns to avoid performance issues
-      const columnsToProcess = columns.slice(0, 5)
-
       // Process each column based on its type
-      columnsToProcess.forEach(column => {
+      columns.forEach(column => {
         const colName = column.name
         const colType = column.type
 
         // Skip columns with no data
-        if (!data[0].hasOwnProperty(colName)) return
+        if (!data[0] || !data[0].hasOwnProperty(colName)) return
 
-        // Process numeric columns (count, sum, avg, min, max)
+        // Track missing values for all column types
+        const missingCount = data.filter(row => 
+          row[colName] === null || 
+          row[colName] === undefined || 
+          row[colName] === ""
+        ).length
+
+        stats.summary.missingValues[colName] = {
+          count: missingCount,
+          percentage: Number(((missingCount / data.length) * 100).toFixed(1))
+        }
+
+        // Process numeric columns (count, sum, avg, min, max, quartiles, standard deviation)
         if (colType === "INTEGER" || colType === "DECIMAL" || colType === "NUMBER") {
           const values = data.map(row => parseFloat(row[colName])).filter(val => !isNaN(val))
           if (values.length === 0) return
 
+          // Sort for quartile calculations
+          const sortedValues = [...values].sort((a, b) => a - b)
           const sum = values.reduce((acc, val) => acc + val, 0)
           const avg = sum / values.length
-          const min = Math.min(...values)
-          const max = Math.max(...values)
+          const min = sortedValues[0]
+          const max = sortedValues[sortedValues.length - 1]
+          
+          // Calculate median (Q2)
+          const midIndex = Math.floor(sortedValues.length / 2)
+          const median = sortedValues.length % 2 === 0
+            ? (sortedValues[midIndex - 1] + sortedValues[midIndex]) / 2
+            : sortedValues[midIndex]
+          
+          // Calculate Q1 and Q3
+          const q1Index = Math.floor(sortedValues.length * 0.25)
+          const q3Index = Math.floor(sortedValues.length * 0.75)
+          const q1 = sortedValues[q1Index]
+          const q3 = sortedValues[q3Index]
+          
+          // Calculate standard deviation
+          const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length
+          const stdDev = Math.sqrt(variance)
+
+          // Calculate IQR and identify outliers
+          const iqr = q3 - q1
+          const lowerBound = q1 - 1.5 * iqr
+          const upperBound = q3 + 1.5 * iqr
+          const outliers = values.filter(val => val < lowerBound || val > upperBound)
+          
+          // Create distribution buckets for histogram data
+          const bucketCount = Math.min(10, Math.ceil(Math.sqrt(values.length)))
+          const bucketSize = (max - min) / bucketCount
+          const buckets = Array(bucketCount).fill(0).map((_, i) => ({
+            range: [Number((min + i * bucketSize).toFixed(2)), Number((min + (i + 1) * bucketSize).toFixed(2))],
+            count: 0
+          }))
+          
+          values.forEach(val => {
+            // Handle edge case for the max value
+            if (val === max) {
+              buckets[buckets.length - 1].count++
+              return
+            }
+            
+            const bucketIndex = Math.floor((val - min) / bucketSize)
+            if (bucketIndex >= 0 && bucketIndex < bucketCount) {
+              buckets[bucketIndex].count++
+            }
+          })
 
           stats.numericColumns[colName] = {
             count: values.length,
             sum: Number(sum.toFixed(2)),
             avg: Number(avg.toFixed(2)),
-            min,
-            max
+            median: Number(median.toFixed(2)),
+            min: Number(min.toFixed(2)),
+            max: Number(max.toFixed(2)),
+            q1: Number(q1.toFixed(2)),
+            q3: Number(q3.toFixed(2)),
+            stdDev: Number(stdDev.toFixed(2)),
+            outlierCount: outliers.length,
+            outlierPercentage: Number(((outliers.length / values.length) * 100).toFixed(1)),
+            distribution: buckets
+          }
+          
+          // Add to summary.outliers if there are outliers
+          if (outliers.length > 0) {
+            stats.summary.outliers.push({
+              column: colName,
+              count: outliers.length,
+              percentage: Number(((outliers.length / values.length) * 100).toFixed(1)),
+              min: Number(Math.min(...outliers).toFixed(2)),
+              max: Number(Math.max(...outliers).toFixed(2))
+            })
+          }
+          
+          // Add distribution data
+          stats.summary.distributions[colName] = {
+            type: 'numeric',
+            buckets
           }
         }
-        // Process categorical columns (frequency distribution - top 3 values)
+        // Process categorical columns (frequency distribution, entropy)
         else if (colType === "STRING" || colType === "BOOLEAN") {
           const freqMap: Record<string, number> = {}
           let nullCount = 0
+          let emptyCount = 0
+          let totalValues = 0
 
           data.forEach(row => {
             const value = row[colName]
@@ -966,34 +1230,99 @@ export default function TableDetailPage() {
               nullCount++
               return
             }
-            const strValue = String(value)
+            
+            const strValue = String(value).trim()
+            if (strValue === '') {
+              emptyCount++
+              return
+            }
+            
             freqMap[strValue] = (freqMap[strValue] || 0) + 1
+            totalValues++
           })
 
-          // Get top 3 most frequent values
-          const topValues = Object.entries(freqMap)
+          // Get all values sorted by frequency
+          const sortedValues = Object.entries(freqMap)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 3)
+          
+          // Top values for this specific column
+          const topValues = sortedValues
+            .slice(0, 5)
             .map(([value, count]) => ({
               value,
               count,
               percentage: Number(((count / data.length) * 100).toFixed(1))
             }))
+            
+          // Calculate entropy (measure of diversity)
+          let entropy = 0
+          if (totalValues > 0) {
+            sortedValues.forEach(([_, count]) => {
+              const p = count / totalValues
+              entropy -= p * Math.log2(p)
+            })
+          }
+
+          // Calculate "dominance" - how much the most common value dominates
+          const dominance = sortedValues.length > 0 
+            ? Number(((sortedValues[0][1] / totalValues) * 100).toFixed(1)) 
+            : 0
 
           stats.categoricalColumns[colName] = {
             uniqueValues: Object.keys(freqMap).length,
             nullCount,
-            topValues
+            emptyCount,
+            topValues,
+            entropy: Number(entropy.toFixed(2)),
+            dominance,
+            diversity: sortedValues.length > 0 
+              ? Number(((Object.keys(freqMap).length / totalValues) * 100).toFixed(1))
+              : 0
+          }
+          
+          // Add top values to summary
+          if (topValues.length > 0) {
+            stats.summary.mostCommonValues.push({
+              column: colName,
+              values: topValues.slice(0, 3)
+            })
+          }
+          
+          // Add distribution data
+          stats.summary.distributions[colName] = {
+            type: 'categorical',
+            values: sortedValues.slice(0, 10).map(([value, count]) => ({
+              value, 
+              count,
+              percentage: Number(((count / data.length) * 100).toFixed(1))
+            }))
           }
         }
         // Process date columns (range, distribution by year/month if meaningful)
         else if (colType === "TIMESTAMP" || colType === "DATE") {
           let minDate: string | null = null;
           let maxDate: string | null = null;
-          let minTimestamp = 0;
+          let minTimestamp = Number.MAX_SAFE_INTEGER;
           let maxTimestamp = 0;
           let validDates = 0;
           let invalidDates = 0;
+          
+          // For distribution analysis
+          const yearDistribution: Record<string, number> = {};
+          const monthDistribution: Record<string, number> = {};
+          const dayOfWeekDistribution: Record<string, number> = {};
+          const validDateObjects: Date[] = [];
+          
+          // Month names for better readability
+          const monthNames = [
+            "January", "February", "March", "April", "May", "June", 
+            "July", "August", "September", "October", "November", "December"
+          ];
+          
+          // Day names
+          const dayNames = [
+            "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+          ];
 
           data.forEach(row => {
             const dateStr = row[colName];
@@ -1003,6 +1332,7 @@ export default function TableDetailPage() {
               const date = new Date(dateStr);
               if (!isNaN(date.getTime())) {
                 validDates++;
+                validDateObjects.push(date);
                 const timestamp = date.getTime();
                 const formattedDate = date.toISOString().split('T')[0];
                 
@@ -1014,6 +1344,18 @@ export default function TableDetailPage() {
                   maxDate = formattedDate;
                   maxTimestamp = timestamp;
                 }
+                
+                // Track distribution by year
+                const year = date.getFullYear().toString();
+                yearDistribution[year] = (yearDistribution[year] || 0) + 1;
+                
+                // Track distribution by month
+                const month = monthNames[date.getMonth()];
+                monthDistribution[month] = (monthDistribution[month] || 0) + 1;
+                
+                // Track distribution by day of week
+                const dayOfWeek = dayNames[date.getDay()];
+                dayOfWeekDistribution[dayOfWeek] = (dayOfWeekDistribution[dayOfWeek] || 0) + 1;
               } else {
                 invalidDates++;
               }
@@ -1022,22 +1364,194 @@ export default function TableDetailPage() {
             }
           });
 
-          if (validDates > 0 && minDate && maxDate && minTimestamp && maxTimestamp) {
+          if (validDates > 0 && minDate && maxDate) {
+            // Sort distributions
+            const sortedYears = Object.entries(yearDistribution)
+              .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+              
+            const sortedMonths = Object.entries(monthDistribution)
+              .sort((a, b) => {
+                const monthIndexA = monthNames.indexOf(a[0]);
+                const monthIndexB = monthNames.indexOf(b[0]);
+                return monthIndexA - monthIndexB;
+              });
+              
+            const sortedDays = Object.entries(dayOfWeekDistribution)
+              .sort((a, b) => {
+                const dayIndexA = dayNames.indexOf(a[0]);
+                const dayIndexB = dayNames.indexOf(b[0]);
+                return dayIndexA - dayIndexB;
+              });
+              
+            // Calculate date difference in days
+            const dateRange = Math.ceil((maxTimestamp - minTimestamp) / (1000 * 60 * 60 * 24));
+            
+            // Detect if data shows weekly patterns
+            let weeklyPattern = false;
+            if (sortedDays.length > 0) {
+              const dayValues = sortedDays.map(([_, count]) => count);
+              const avgCount = dayValues.reduce((a, b) => a + b, 0) / dayValues.length;
+              const maxDeviation = Math.max(...dayValues.map(v => Math.abs(v - avgCount)));
+              
+              // If max deviation is >20% from average, consider it a weekly pattern
+              weeklyPattern = maxDeviation > (0.2 * avgCount);
+            }
+            
+            // Detect if data shows yearly seasonality
+            let yearlyPattern = false;
+            if (sortedMonths.length > 6) { // Need sufficient months to detect pattern
+              const monthValues = sortedMonths.map(([_, count]) => count);
+              const avgCount = monthValues.reduce((a, b) => a + b, 0) / monthValues.length;
+              const maxDeviation = Math.max(...monthValues.map(v => Math.abs(v - avgCount)));
+              
+              // If max deviation is >30% from average, consider it a yearly pattern
+              yearlyPattern = maxDeviation > (0.3 * avgCount);
+            }
+            
+            // Detect any trends over time (increasing, decreasing, or stable)
+            let trend = "stable";
+            if (validDateObjects.length > 10) {
+              // Group by weeks or months for trend analysis
+              const isLongPeriod = dateRange > 90; // More than 3 months
+              const periodMap: Record<string, number> = {};
+              
+              validDateObjects.forEach(date => {
+                let periodKey;
+                if (isLongPeriod) {
+                  // Use month as period for long ranges
+                  periodKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                } else {
+                  // Use week number for shorter ranges
+                  const weekNumber = Math.floor((date.getTime() - minTimestamp) / (7 * 24 * 60 * 60 * 1000));
+                  periodKey = `week-${weekNumber}`;
+                }
+                periodMap[periodKey] = (periodMap[periodKey] || 0) + 1;
+              });
+              
+              // Sort periods chronologically
+              const sortedPeriods = Object.entries(periodMap)
+                .sort((a, b) => {
+                  if (isLongPeriod) {
+                    return a[0].localeCompare(b[0]);
+                  } else {
+                    return parseInt(a[0].split('-')[1]) - parseInt(b[0].split('-')[1]);
+                  }
+                });
+              
+              // Only analyze if we have at least 3 periods
+              if (sortedPeriods.length >= 3) {
+                // Get first and last period counts to determine trend
+                const firstPeriod = sortedPeriods[0][1];
+                const lastPeriod = sortedPeriods[sortedPeriods.length - 1][1];
+                const changePercent = ((lastPeriod - firstPeriod) / firstPeriod) * 100;
+                
+                if (changePercent > 20) {
+                  trend = "increasing";
+                } else if (changePercent < -20) {
+                  trend = "decreasing";
+                }
+              }
+            }
+
             stats.dateColumns[colName] = {
               validDates,
               invalidDates,
+              nullPercentage: Number(((invalidDates / data.length) * 100).toFixed(1)),
               minDate,
               maxDate,
-              dateRange: Math.ceil((maxTimestamp - minTimestamp) / (1000 * 60 * 60 * 24))
+              dateRange,
+              yearDistribution: sortedYears,
+              monthDistribution: sortedMonths,
+              dayOfWeekDistribution: sortedDays,
+              weeklyPattern,
+              yearlyPattern,
+              trend
             };
+            
+            // Add to trends summary if there's a notable trend
+            if (trend !== "stable") {
+              stats.summary.trends[colName] = {
+                type: 'date',
+                trend,
+                period: dateRange > 90 ? 'monthly' : 'weekly'
+              };
+            }
           }
         }
-      })
+      });
 
-      return stats
+      // Find correlations between numeric columns
+      // Note: This is a simple correlation calculation and could be enhanced
+      const numericColumnNames = Object.keys(stats.numericColumns);
+      if (numericColumnNames.length >= 2) {
+        for (let i = 0; i < numericColumnNames.length; i++) {
+          for (let j = i + 1; j < numericColumnNames.length; j++) {
+            const col1 = numericColumnNames[i];
+            const col2 = numericColumnNames[j];
+            
+            // Get all rows where both values are present
+            const validRows = data.filter(row => 
+              row[col1] !== null && 
+              row[col1] !== undefined && 
+              !isNaN(parseFloat(row[col1])) &&
+              row[col2] !== null && 
+              row[col2] !== undefined && 
+              !isNaN(parseFloat(row[col2]))
+            );
+            
+            if (validRows.length < 10) continue; // Need enough data points
+            
+            // Calculate correlation coefficient (Pearson)
+            const values1 = validRows.map(row => parseFloat(row[col1]));
+            const values2 = validRows.map(row => parseFloat(row[col2]));
+            
+            const mean1 = values1.reduce((a, b) => a + b, 0) / values1.length;
+            const mean2 = values2.reduce((a, b) => a + b, 0) / values2.length;
+            
+            let numerator = 0;
+            let denom1 = 0;
+            let denom2 = 0;
+            
+            for (let k = 0; k < values1.length; k++) {
+              const diff1 = values1[k] - mean1;
+              const diff2 = values2[k] - mean2;
+              
+              numerator += diff1 * diff2;
+              denom1 += diff1 * diff1;
+              denom2 += diff2 * diff2;
+            }
+            
+            const correlation = numerator / (Math.sqrt(denom1) * Math.sqrt(denom2));
+            
+            // Only add significant correlations
+            if (Math.abs(correlation) > 0.3) {
+              stats.summary.correlations.push({
+                columns: [col1, col2],
+                correlation: Number(correlation.toFixed(2)),
+                strength: Math.abs(correlation) > 0.7 ? 'strong' : 
+                          Math.abs(correlation) > 0.5 ? 'moderate' : 'weak',
+                direction: correlation > 0 ? 'positive' : 'negative'
+              });
+            }
+          }
+        }
+      }
+      
+      // Sort correlations by strength
+      stats.summary.correlations.sort((a: any, b: any) => Math.abs(b.correlation) - Math.abs(a.correlation));
+      
+      // Sort most common values by percentage
+      stats.summary.mostCommonValues.sort((a: any, b: any) => {
+        return b.values[0].percentage - a.values[0].percentage;
+      });
+      
+      // Sort outliers by percentage
+      stats.summary.outliers.sort((a: any, b: any) => b.percentage - a.percentage);
+
+      return stats;
     } catch (error) {
-      console.error("Error generating report stats:", error)
-      return {}
+      console.error("Error generating report stats:", error);
+      return {};
     }
   }
 
@@ -1117,6 +1631,9 @@ export default function TableDetailPage() {
           title: "Query Executed",
           description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
         });
+
+        // Reset filter group row counts since we're using custom SQL
+        setFilterGroupRowCounts({});
       } else {
         // Use existing filter groups
         const sql = generateSqlFromFilters();
@@ -1192,6 +1709,9 @@ export default function TableDetailPage() {
           title: "Query Executed",
           description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
         });
+        
+        // After main query execution, calculate row counts for each filter group
+        await calculateFilterGroupRowCounts();
       }
     } catch (error: any) {
       console.error("Error executing query:", error);
@@ -1204,6 +1724,86 @@ export default function TableDetailPage() {
       setExecuting(false);
     }
   };
+
+  // Function to calculate row counts for each filter group independently
+  const calculateFilterGroupRowCounts = async () => {
+    // Only proceed if we have filter groups
+    if (filterGroups.length === 0) {
+      setFilterGroupRowCounts({});
+      return;
+    }
+
+    const counts: Record<string, number> = {};
+    const enabledGroups = filterGroups.filter(group => group.isEnabled !== false);
+    
+    // For each enabled group, calculate cumulative counts
+    for (let i = 0; i < enabledGroups.length; i++) {
+      try {
+        // Create a query with groups up to and including the current one
+        const cumulativeGroups = enabledGroups.slice(0, i + 1);
+        const cumulativeBetweenConditions = betweenGroupConditions.slice(0, i);
+        
+        const cumulativeQuery = {
+          filterGroups: cumulativeGroups.map((group) => ({
+            logic_operator: group.condition === "NOT" ? "AND" : group.condition,
+            not: group.condition === "NOT",
+            filters: group.filters.map((filter) => ({
+              type: 'condition',
+              column: filter.column,
+              operator: mapOperatorToBackend(filter.operator),
+              value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                ? [filter.value, filter.value2] 
+                : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                  ? filter.value.split(',').map((v: string) => v.trim()) 
+                  : filter.value
+            }))
+          })),
+          // Add between-group conditions for the groups we're including
+          groupConditions: cumulativeBetweenConditions.length > 0 ? cumulativeBetweenConditions : ['AND'],
+          // We only need the count, not the actual data
+          page: 1,
+          pageSize: 1
+        };
+        
+        // Execute query for this cumulative set of filter groups
+        const response = await dataService.getTableData(tableName, cumulativeQuery);
+        
+        // Extract the total count
+        let count = 0;
+        if (response && typeof response === 'object') {
+          if (response.success && response.data && response.data.pagination) {
+            count = response.data.pagination.total || 0;
+          }
+        }
+        
+        // Store the count with the current group's ID
+        counts[enabledGroups[i].id] = count;
+      } catch (error) {
+        console.error(`Error getting count for filter group ${enabledGroups[i].id}:`, error);
+        counts[enabledGroups[i].id] = 0;
+      }
+    }
+    
+    // Set any disabled groups to 0
+    filterGroups.forEach(group => {
+      if (group.isEnabled === false) {
+        counts[group.id] = 0;
+      }
+    });
+    
+    setFilterGroupRowCounts(counts);
+  };
+  
+  // Remove the useEffect that auto-recalculates on filter change
+  // We'll only calculate when "Run Query" is clicked
+  useEffect(() => {
+    if (!loading && !executing && filterGroups.length > 0) {
+      // Initial load only - not on every filter change
+      if (Object.keys(filterGroupRowCounts).length === 0) {
+        calculateFilterGroupRowCounts();
+      }
+    }
+  }, [loading, executing]);
 
   // Handle pagination changes
   const handlePageChange = (newPage: number) => {
@@ -1424,96 +2024,461 @@ export default function TableDetailPage() {
     }
 
     return (
-      <div className="space-y-4">
-        {/* Compact Overview Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {/* Numeric Columns */}
-          {Object.entries(reportStats.numericColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                  <BarChart className="h-4 w-4 mr-2 text-primary" />
-                  {colName}
-                </h4>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 text-sm">
-                <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Avg:</span>
-                  <span className="font-medium">{stats.avg}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Sum:</span>
-                  <span className="font-medium">{stats.sum}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Min:</span>
-                  <span className="font-medium">{stats.min}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Max:</span>
-                  <span className="font-medium">{stats.max}</span>
-                </div>
-              </div>
+      <div className="space-y-8">
+        {/* Overall Data Summary */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium flex items-center">
+            <Database className="h-5 w-5 mr-2 text-blue-500" />
+            Overall Data Summary
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-blue-500/10 rounded-md p-4 border border-blue-500/20">
+              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Records</div>
+              <div className="text-2xl font-semibold">{reportStats.totalRecords}</div>
             </div>
-          ))}
-
-          {/* Categorical Columns */}
-          {Object.entries(reportStats.categoricalColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                  <PieChart className="h-4 w-4 mr-2 text-primary" />
-                  {colName}
-                </h4>
-                <span className="text-sm text-muted-foreground">{stats.uniqueValues} unique</span>
+            {Object.keys(reportStats.numericColumns).length > 0 && (
+              <div className="bg-purple-500/10 rounded-md p-4 border border-purple-500/20">
+                <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">Numeric Columns</div>
+                <div className="text-2xl font-semibold">{Object.keys(reportStats.numericColumns).length}</div>
               </div>
-              {stats.topValues.slice(0, 2).length > 0 ? (
-                <div className="space-y-2">
-                  {stats.topValues.slice(0, 2).map((tv: any, idx: number) => (
-                    <div key={idx} className="flex items-center text-sm">
-                      <div className="w-16 truncate mr-2" title={tv.value}>
-                        {tv.value}
+            )}
+            {Object.keys(reportStats.categoricalColumns).length > 0 && (
+              <div className="bg-orange-500/10 rounded-md p-4 border border-orange-500/20">
+                <div className="text-sm text-orange-600 dark:text-orange-400 mb-1">Categorical Columns</div>
+                <div className="text-2xl font-semibold">{Object.keys(reportStats.categoricalColumns).length}</div>
+              </div>
+            )}
+            {Object.keys(reportStats.dateColumns).length > 0 && (
+              <div className="bg-green-500/10 rounded-md p-4 border border-green-500/20">
+                <div className="text-sm text-green-600 dark:text-green-400 mb-1">Date Columns</div>
+                <div className="text-2xl font-semibold">{Object.keys(reportStats.dateColumns).length}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Key Insights */}
+        {(reportStats.summary.correlations.length > 0 || 
+          reportStats.summary.outliers.length > 0 || 
+          Object.keys(reportStats.summary.trends).length > 0) && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium flex items-center">
+              <Zap className="h-5 w-5 mr-2 text-amber-500" />
+              Key Insights
+            </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Correlations */}
+              {reportStats.summary.correlations.length > 0 && (
+                <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 rounded-md p-4 border border-amber-500/20">
+                  <h4 className="text-base font-medium mb-3 flex items-center">
+                    <ArrowLeft className="h-4 w-4 mr-2 text-amber-500 rotate-45" />
+                    Column Correlations
+                  </h4>
+                  <div className="space-y-3">
+                    {reportStats.summary.correlations.slice(0, 3).map((corr: any, idx: number) => (
+                      <div key={idx} className="flex items-center">
+                        <div className="flex-1 flex items-center">
+                          <div className="w-2 h-2 rounded-full mr-2" 
+                            style={{ 
+                              backgroundColor: corr.direction === 'positive' 
+                                ? 'rgb(34, 197, 94)' // green-500
+                                : 'rgb(239, 68, 68)' // red-500
+                            }}
+                          />
+                          <div className="truncate mr-1" title={corr.columns[0]}>
+                            {corr.columns[0]}
+                          </div>
+                          <span className="mx-1 text-muted-foreground">and</span>
+                          <div className="truncate" title={corr.columns[1]}>
+                            {corr.columns[1]}
+                          </div>
+                        </div>
+                        <Badge className={`ml-2 ${
+                          corr.strength === 'strong' 
+                            ? 'bg-amber-500 hover:bg-amber-600' 
+                            : corr.strength === 'moderate'
+                              ? 'bg-amber-400 hover:bg-amber-500'
+                              : 'bg-amber-300 hover:bg-amber-400'
+                        }`}>
+                          {corr.correlation > 0 ? '+' : ''}{corr.correlation}
+                        </Badge>
                       </div>
-                      <div className="flex-grow bg-muted rounded-full h-2 mr-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full" 
-                          style={{ width: `${tv.percentage}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-sm w-12 text-right text-muted-foreground font-medium">
-                        {tv.percentage}%
-                      </div>
+                    ))}
+                  </div>
+                  {reportStats.summary.correlations.length > 3 && (
+                    <div className="text-sm text-muted-foreground mt-2 text-center">
+                      +{reportStats.summary.correlations.length - 3} more correlations
                     </div>
-                  ))}
+                  )}
                 </div>
-              ) : (
-                <div className="text-sm text-muted-foreground text-center py-2">No frequent values</div>
+              )}
+
+              {/* Outliers */}
+              {reportStats.summary.outliers.length > 0 && (
+                <div className="bg-gradient-to-br from-red-500/5 to-red-500/10 rounded-md p-4 border border-red-500/20">
+                  <h4 className="text-base font-medium mb-3 flex items-center">
+                    <span className="relative flex h-5 w-5 mr-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-20"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 items-center justify-center text-white text-xs">!</span>
+                    </span>
+                    Detected Outliers
+                  </h4>
+                  <div className="space-y-3">
+                    {reportStats.summary.outliers.slice(0, 3).map((outlier: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <div className="truncate" title={outlier.column}>
+                          {outlier.column}
+                        </div>
+                        <div className="flex items-center">
+                          <Badge variant="outline" className="mr-2 border-red-500/20 text-red-600 dark:text-red-400">
+                            {outlier.count} values
+                          </Badge>
+                          <Badge className="bg-red-500 hover:bg-red-600">
+                            {outlier.percentage}%
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {reportStats.summary.outliers.length > 3 && (
+                    <div className="text-sm text-muted-foreground mt-2 text-center">
+                      +{reportStats.summary.outliers.length - 3} more columns with outliers
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Trends */}
+              {Object.keys(reportStats.summary.trends).length > 0 && (
+                <div className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 rounded-md p-4 border border-blue-500/20">
+                  <h4 className="text-base font-medium mb-3 flex items-center">
+                    <ArrowLeft className={`h-4 w-4 mr-2 text-blue-500 ${
+                      Object.values(reportStats.summary.trends)[0]?.trend === 'increasing' 
+                        ? 'rotate-45' 
+                        : 'rotate-135'
+                    }`} />
+                    Detected Trends
+                  </h4>
+                  <div className="space-y-3">
+                    {Object.entries(reportStats.summary.trends).slice(0, 3).map(([colName, trend]: [string, any], idx: number) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <div className="truncate" title={colName}>
+                          {colName}
+                        </div>
+                        <Badge className={`${
+                          trend.trend === 'increasing' 
+                            ? 'bg-green-500 hover:bg-green-600' 
+                            : 'bg-red-500 hover:bg-red-600'
+                        }`}>
+                          {trend.trend} trend
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Missing Values */}
+              {Object.entries(reportStats.summary.missingValues)
+                .filter(([_, stats]: [string, any]) => stats.percentage > 0)
+                .length > 0 && (
+                <div className="bg-gradient-to-br from-gray-500/5 to-gray-500/10 rounded-md p-4 border border-gray-500/20">
+                  <h4 className="text-base font-medium mb-3 flex items-center">
+                    <div className="h-4 w-4 mr-2 border border-gray-500 rounded-sm" />
+                    Missing Values
+                  </h4>
+                  <div className="space-y-3">
+                    {Object.entries(reportStats.summary.missingValues)
+                      .filter(([_, stats]: [string, any]) => stats.percentage > 0)
+                      .sort((a: any, b: any) => b[1].percentage - a[1].percentage)
+                      .slice(0, 3)
+                      .map(([colName, stats]: [string, any], idx: number) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="truncate" title={colName}>
+                            {colName}
+                          </div>
+                          <div className="flex items-center">
+                            <Badge variant="outline" className="mr-2 border-gray-500/20">
+                              {stats.count} values
+                            </Badge>
+                            <Badge className="bg-gray-500 hover:bg-gray-600">
+                              {stats.percentage}%
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
               )}
             </div>
-          ))}
+          </div>
+        )}
 
-          {/* Date Columns */}
-          {Object.entries(reportStats.dateColumns).map(([colName, stats]: [string, any]) => (
-            <div key={colName} className="bg-muted/20 rounded-md p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                  <Calendar className="h-4 w-4 mr-2 text-primary" />
-                  {colName}
-                </h4>
-                <span className="text-sm text-muted-foreground">{stats.dateRange} days</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex flex-col">
-                  <span className="text-muted-foreground">First:</span>
-                  <span className="font-medium truncate" title={stats.minDate}>{stats.minDate}</span>
+        {/* Common Values */}
+        {reportStats.summary.mostCommonValues.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium flex items-center">
+              <PieChart className="h-5 w-5 mr-2 text-orange-500" />
+              Most Common Values
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {reportStats.summary.mostCommonValues.slice(0, 6).map((item: any, idx: number) => (
+                <div key={idx} className="bg-gradient-to-br from-orange-500/5 to-orange-500/10 rounded-md p-4 border border-orange-500/20">
+                  <h4 className="text-base font-medium mb-2 truncate" title={item.column}>
+                    {item.column}
+                  </h4>
+                  <div className="space-y-2">
+                    {item.values.map((value: any, vidx: number) => (
+                      <div key={vidx} className="flex items-center">
+                        <div className="w-28 truncate mr-2" title={value.value}>
+                          {value.value}
+                        </div>
+                        <div className="flex-grow bg-muted rounded-full h-2 mr-2">
+                          <div 
+                            className="bg-orange-500 h-2 rounded-full" 
+                            style={{ width: `${value.percentage}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-sm w-12 text-right text-muted-foreground font-medium">
+                          {value.percentage}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-muted-foreground">Last:</span>
-                  <span className="font-medium truncate" title={stats.maxDate}>{stats.maxDate}</span>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
+          </div>
+        )}
+
+        {/* Column Details Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium flex items-center">
+            <Layers className="h-5 w-5 mr-2 text-primary" />
+            Column Details
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* Numeric Columns */}
+            {Object.entries(reportStats.numericColumns).map(([colName, stats]: [string, any]) => (
+              <div key={colName} className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-md p-4 border border-primary/20 hover:border-primary/30 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                    <BarChart className="h-4 w-4 mr-2 text-primary" />
+                    {colName}
+                  </h4>
+                </div>
+                
+                {/* Histogram miniature */}
+                {stats.distribution && stats.distribution.length > 0 && (
+                  <div className="mb-3 h-12 flex items-end">
+                    {stats.distribution.map((bucket: any, idx: number) => {
+                      const maxCount = Math.max(...stats.distribution.map((b: any) => b.count));
+                      const heightPercentage = bucket.count > 0 
+                        ? Math.max(15, (bucket.count / maxCount) * 100) 
+                        : 0;
+                      return (
+                        <div 
+                          key={idx} 
+                          className="flex-1 bg-primary/30 rounded-sm mx-0.5"
+                          style={{ height: `${heightPercentage}%` }}
+                          title={`${bucket.range[0]} - ${bucket.range[1]}: ${bucket.count} values`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-x-4 text-sm">
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">Avg:</span>
+                    <span className="font-medium">{stats.avg}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">Median:</span>
+                    <span className="font-medium">{stats.median}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">Min:</span>
+                    <span className="font-medium">{stats.min}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">Max:</span>
+                    <span className="font-medium">{stats.max}</span>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">StdDev:</span>
+                    <span className="font-medium">{stats.stdDev}</span>
+                  </div>
+                  {stats.outlierCount > 0 && (
+                    <div className="flex justify-between py-1">
+                      <span className="text-muted-foreground">Outliers:</span>
+                      <span className="font-medium text-red-500">{stats.outlierPercentage}%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Categorical Columns */}
+            {Object.entries(reportStats.categoricalColumns).map(([colName, stats]: [string, any]) => (
+              <div key={colName} className="bg-gradient-to-br from-orange-500/5 to-orange-600/10 rounded-md p-4 border border-orange-500/20 hover:border-orange-500/30 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                    <PieChart className="h-4 w-4 mr-2 text-orange-500" />
+                    {colName}
+                  </h4>
+                  <Badge variant="outline" className="border-orange-500/20 text-orange-600 dark:text-orange-400">
+                    {stats.uniqueValues} unique
+                  </Badge>
+                </div>
+                
+                {/* Distribution bar */}
+                {stats.dominance > 0 && (
+                  <div className="mb-3">
+                    <div className="flex items-center h-6 mb-1">
+                      <div className="flex-grow bg-muted rounded-full h-2.5">
+                        <div 
+                          className="bg-orange-500 h-2.5 rounded-full" 
+                          style={{ width: `${stats.dominance}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-xs ml-2 text-muted-foreground">
+                        {stats.dominance}% dominant
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {stats.topValues.length > 0 ? (
+                  <div className="space-y-2">
+                    {stats.topValues.slice(0, 3).map((tv: any, idx: number) => (
+                      <div key={idx} className="flex items-center text-sm">
+                        <div className="w-20 truncate mr-2" title={tv.value}>
+                          {tv.value}
+                        </div>
+                        <div className="flex-grow bg-muted rounded-full h-2 mr-2">
+                          <div 
+                            className="bg-orange-500/80 h-2 rounded-full" 
+                            style={{ width: `${tv.percentage}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-sm w-12 text-right text-muted-foreground font-medium">
+                          {tv.percentage}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center py-2">No frequent values</div>
+                )}
+                
+                {/* Additional stats */}
+                <div className="mt-3 grid grid-cols-2 gap-x-4 text-sm">
+                  {stats.nullCount > 0 && (
+                    <div className="flex justify-between py-1">
+                      <span className="text-muted-foreground">Null:</span>
+                      <span className="font-medium">
+                        {((stats.nullCount / reportStats.totalRecords) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                  {stats.emptyCount > 0 && (
+                    <div className="flex justify-between py-1">
+                      <span className="text-muted-foreground">Empty:</span>
+                      <span className="font-medium">
+                        {((stats.emptyCount / reportStats.totalRecords) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-1">
+                    <span className="text-muted-foreground">Diversity:</span>
+                    <span className="font-medium">{stats.diversity}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Date Columns */}
+            {Object.entries(reportStats.dateColumns).map(([colName, stats]: [string, any]) => (
+              <div key={colName} className="bg-gradient-to-br from-blue-500/5 to-blue-600/10 rounded-md p-4 border border-blue-500/20 hover:border-blue-500/30 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
+                    <CalendarIcon className="h-4 w-4 mr-2 text-blue-500" />
+                    {colName}
+                  </h4>
+                  <Badge variant="outline" className="border-blue-500/20 text-blue-500">
+                    {stats.dateRange} days
+                  </Badge>
+                </div>
+                
+                {/* Period distribution */}
+                {stats.trend !== "stable" && (
+                  <div className="mb-3 flex items-center">
+                    <Badge className={`mr-2 ${
+                      stats.trend === "increasing" 
+                        ? "bg-green-500 hover:bg-green-600" 
+                        : "bg-red-500 hover:bg-red-600"
+                    }`}>
+                      {stats.trend} trend
+                    </Badge>
+                    {stats.weeklyPattern && (
+                      <Badge variant="outline" className="mr-2 border-blue-500/20 text-blue-500">
+                        weekly pattern
+                      </Badge>
+                    )}
+                    {stats.yearlyPattern && (
+                      <Badge variant="outline" className="border-blue-500/20 text-blue-500">
+                        seasonal
+                      </Badge>
+                    )}
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">First:</span>
+                    <span className="font-medium truncate" title={stats.minDate}>{stats.minDate}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Last:</span>
+                    <span className="font-medium truncate" title={stats.maxDate}>{stats.maxDate}</span>
+                  </div>
+                </div>
+                
+                {/* Top distribution - show either months or days depending on which has more variation */}
+                {stats.monthDistribution && stats.monthDistribution.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {stats.monthDistribution.length > 1 ? "Monthly distribution:" : "Month:"}
+                    </div>
+                    <div className="flex text-xs">
+                      {stats.monthDistribution.slice(0, 6).map(([month, count]: [string, number], idx: number) => {
+                        const maxCount = Math.max(
+                          ...stats.monthDistribution.map(([_, c]: [string, number]) => c)
+                        );
+                        const percentage = Math.max(20, (count / maxCount) * 100);
+                        return (
+                          <div 
+                            key={idx} 
+                            className="flex-1 flex flex-col items-center"
+                            title={`${month}: ${count} records`}
+                          >
+                            <div 
+                              className="w-full bg-blue-500/30 rounded-sm"
+                              style={{ height: `${percentage}%`, maxHeight: '24px' }}
+                            />
+                            <div className="mt-1 truncate w-full text-center" style={{ fontSize: '0.65rem' }}>
+                              {month.substring(0, 3)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -1526,16 +2491,20 @@ export default function TableDetailPage() {
     const endRecord = Math.min(page * pageSize, total);
     
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 px-4">
-        <div className="text-sm text-muted-foreground">
-          Showing {startRecord} to {endRecord} of {total} records
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-4 pb-4 bg-muted/5 rounded-lg border border-green-500/10 py-3">
+        <div className="text-sm font-medium flex items-center">
+          <span className="text-muted-foreground mr-2">Showing</span> 
+          <span className="px-2 py-1 rounded bg-green-500/10 text-green-700 dark:text-green-300">{startRecord}-{endRecord}</span> 
+          <span className="text-muted-foreground mx-2">of</span> 
+          <span className="px-2 py-1 rounded bg-green-500/10 text-green-700 dark:text-green-300">{total}</span> 
+          <span className="text-muted-foreground ml-2">records</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Select 
             value={pageSize.toString()} 
             onValueChange={(value) => handlePageSizeChange(parseInt(value))}
           >
-            <SelectTrigger className="w-[110px] h-8">
+            <SelectTrigger className="w-[120px] h-8 border-green-500/20 focus-visible:ring-green-500/30">
               <SelectValue placeholder="Rows per page" />
             </SelectTrigger>
             <SelectContent>
@@ -1546,11 +2515,11 @@ export default function TableDetailPage() {
             </SelectContent>
           </Select>
           
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 bg-green-500/5 p-1 rounded-md border border-green-500/20">
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
-              className="h-8 w-8 p-0" 
+              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
               onClick={() => handlePageChange(1)}
               disabled={page === 1}
             >
@@ -1558,9 +2527,9 @@ export default function TableDetailPage() {
               <ChevronFirst className="h-4 w-4" />
             </Button>
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
-              className="h-8 w-8 p-0" 
+              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
             >
@@ -1568,14 +2537,117 @@ export default function TableDetailPage() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             
-            <span className="text-sm px-2">
-              Page {page} of {totalPages}
-            </span>
+            <div className="text-sm px-2 font-medium flex items-center">
+              <span className="text-muted-foreground mr-1">Page</span>
+              <span className="inline-block mr-1">
+                <Select
+                  value={String(page)}
+                  onValueChange={(value) => handlePageChange(parseInt(value))}
+                >
+                <SelectTrigger className="h-7 min-w-8 border-none px-2 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-300 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 mx-1.5 hover:bg-green-500/20 transition-colors">
+                  <SelectValue placeholder={page} />
+                  {/* <ChevronDown className="h-3.5 w-3.5 ml-0.5 opacity-70" /> */}
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {totalPages <= 100 ? (
+                    // For reasonable number of pages, show all
+                    Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                      <SelectItem key={pageNum} value={String(pageNum)}>
+                        {pageNum}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    // For large number of pages, show groups
+                    <>
+                      {/* First few pages */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map((pageNum) => (
+                        <SelectItem 
+                          key={pageNum} 
+                          value={String(pageNum)}
+                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                        >
+                          {pageNum}
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Separator */}
+                      <SelectItem disabled value="separator-1" className="h-0 py-0 my-1 border-b border-muted/50">
+                        <span className="sr-only">Separator</span>
+                      </SelectItem>
+                      
+                      {/* Add sections in the middle */}
+                      {[10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400, 500].filter(
+                        num => num > 5 && num < totalPages - 5
+                      ).map((pageNum) => (
+                        <SelectItem 
+                          key={pageNum} 
+                          value={String(pageNum)}
+                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                        >
+                          {pageNum}
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Separator before current page section */}
+                      {page > 5 && page < totalPages - 5 && (
+                        <SelectItem disabled value="separator-2" className="h-0 py-0 my-1 border-b border-muted/50">
+                          <span className="sr-only">Separator</span>
+                        </SelectItem>
+                      )}
+                      
+                      {/* Add pages around current page */}
+                      {page > 5 && page < totalPages - 5 && 
+                        Array.from(
+                          { length: 5 }, 
+                          (_, i) => Math.max(6, page - 2) + i
+                        )
+                        .filter(num => num > 5 && num < totalPages - 5)
+                        .map((pageNum) => (
+                          <SelectItem 
+                            key={`current-${pageNum}`} 
+                            value={String(pageNum)}
+                            className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                          >
+                            {pageNum}
+                          </SelectItem>
+                        ))
+                      }
+                      
+                      {/* Separator before last pages */}
+                      {totalPages > 10 && (
+                        <SelectItem disabled value="separator-3" className="h-0 py-0 my-1 border-b border-muted/50">
+                          <span className="sr-only">Separator</span>
+                        </SelectItem>
+                      )}
+                      
+                      {/* Last few pages */}
+                      {Array.from(
+                        { length: 5 }, 
+                        (_, i) => totalPages - 4 + i
+                      )
+                      .filter(num => num > 5)
+                      .map((pageNum) => (
+                        <SelectItem 
+                          key={`last-${pageNum}`} 
+                          value={String(pageNum)}
+                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                        >
+                          {pageNum}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              </span>
+              <span className="text-muted-foreground mr-1">of</span>
+              <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-300 text-center">{totalPages}</span>
+            </div>
             
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
-              className="h-8 w-8 p-0" 
+              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
               onClick={() => handlePageChange(page + 1)}
               disabled={page >= totalPages}
             >
@@ -1583,9 +2655,9 @@ export default function TableDetailPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
             <Button 
-              variant="outline" 
+              variant="ghost" 
               size="sm" 
-              className="h-8 w-8 p-0" 
+              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
               onClick={() => handlePageChange(totalPages)}
               disabled={page >= totalPages}
             >
@@ -1689,7 +2761,7 @@ export default function TableDetailPage() {
               </Card>
 
               {/* Filter Groups - Scrollable */}
-              <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+              <div className="flex-1 overflow-y-auto pr-1 space-y-4 max-h-[calc(100vh-25rem)] custom-scrollbar pb-4">
                 {filterGroups.length === 0 ? (
                   <Card className="border-dashed border-primary/20 bg-primary/5">
                     <CardContent className="text-center py-12">
@@ -1715,6 +2787,7 @@ export default function TableDetailPage() {
                         onUpdate={(updates) => updateFilterGroup(group.id, updates)}
                         onRemove={() => removeFilterGroup(group.id)}
                         onDuplicate={() => duplicateFilterGroup(group.id)}
+                        rowCount={filterGroupRowCounts[group.id]}
                       />
                       {index < filterGroups.length - 1 && (
                         <div className="flex items-center justify-center py-3">
@@ -1743,64 +2816,77 @@ export default function TableDetailPage() {
                 <CardHeader className="py-3">
                   <CardTitle className="flex items-center text-base">
                     <div className="h-6 w-6 rounded-md bg-blue-500/10 flex items-center justify-center mr-2">
-                      <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                      <CalendarIcon className="h-3.5 w-3.5 text-blue-500" />
                     </div>
                     Execution Timing
                   </CardTitle>
+                  <CardDescription className="text-xs text-blue-500/70">
+                    Configure when this segment should be executed
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 pb-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="startDate" className="text-xs">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startDate" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
                         Start Date
                       </Label>
-                      <Input
-                        id="startDate"
-                        type="date"
-                        value={segmentData.startDate}
-                        onChange={(e) => setSegmentData({ ...segmentData, startDate: e.target.value })}
-                        className="text-xs border-blue-500/20 focus-visible:ring-blue-500/30"
+                      <DatePicker 
+                        date={segmentData.startDate} 
+                        setDate={(date) => setSegmentData({ ...segmentData, startDate: date })}
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="endDate" className="text-xs">
+                    <div className="space-y-2">
+                      <Label htmlFor="endDate" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
                         End Date
                       </Label>
-                      <Input
-                        id="endDate"
-                        type="date"
-                        value={segmentData.endDate}
-                        onChange={(e) => setSegmentData({ ...segmentData, endDate: e.target.value })}
-                        className="text-xs border-blue-500/20 focus-visible:ring-blue-500/30"
+                      <DatePicker 
+                        date={segmentData.endDate} 
+                        setDate={(date) => setSegmentData({ ...segmentData, endDate: date })}
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="startTime" className="text-xs">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="startTime" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
                         Start Time
                       </Label>
-                      <Input
-                        id="startTime"
-                        type="time"
-                        value={segmentData.startTime}
-                        onChange={(e) => setSegmentData({ ...segmentData, startTime: e.target.value })}
-                        className="text-xs border-blue-500/20 focus-visible:ring-blue-500/30"
+                      <TimePicker
+                        time={segmentData.startTime}
+                        setTime={(time) => setSegmentData({ ...segmentData, startTime: time })}
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="endTime" className="text-xs">
+                    <div className="space-y-2">
+                      <Label htmlFor="endTime" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
                         End Time
                       </Label>
-                      <Input
-                        id="endTime"
-                        type="time"
-                        value={segmentData.endTime}
-                        onChange={(e) => setSegmentData({ ...segmentData, endTime: e.target.value })}
-                        className="text-xs border-blue-500/20 focus-visible:ring-blue-500/30"
+                      <TimePicker
+                        time={segmentData.endTime}
+                        setTime={(time) => setSegmentData({ ...segmentData, endTime: time })}
                       />
                     </div>
                   </div>
+                  
+                  {(segmentData.startDate || segmentData.endDate || 
+                    segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && (
+                    <div className="mt-3 p-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-xs">
+                      <div className="flex items-center text-blue-600 dark:text-blue-400">
+                        <Clock className="h-3.5 w-3.5 mr-1.5" />
+                        <span className="font-medium">Execution schedule:</span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        {segmentData.startDate && segmentData.endDate ? 
+                          `From ${new Date(segmentData.startDate).toLocaleDateString()} to ${new Date(segmentData.endDate).toLocaleDateString()}` :
+                          segmentData.startDate ? 
+                            `Starting from ${new Date(segmentData.startDate).toLocaleDateString()}` :
+                            segmentData.endDate ? 
+                              `Until ${new Date(segmentData.endDate).toLocaleDateString()}` : 
+                              "No date constraints"
+                        }
+                        {(segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && 
+                          `, daily between ${segmentData.startTime} and ${segmentData.endTime}`}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1857,16 +2943,16 @@ export default function TableDetailPage() {
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.total}</span>
-                          <span className="text-xs text-muted-foreground">total records</span>
+                          <span className="text-xs text-muted-foreground">Overall Rows</span>
                         </div>
                         <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{tableData?.length || 0}</span>
+                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.page || 0}</span>
                           <span className="text-xs text-muted-foreground">current page</span>
                         </div>
-                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                        {/* <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{columns?.length || 0}</span>
                           <span className="text-xs text-muted-foreground">columns</span>
-                        </div>
+                        </div> */}
                         {enabledFilterCount > 0 && (
                           <div className="flex flex-col items-center px-4 py-2 bg-primary/10 rounded-md border border-primary/20">
                             <span className="text-lg font-semibold text-primary">{enabledFilterCount}</span>
@@ -1906,12 +2992,14 @@ export default function TableDetailPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0 sm:p-0">
                   {showDataTable && (
-                    <>
-                      <DataTable data={tableData || []} columns={columns || []} />
+                    <div className="space-y-4">
+                      <div className="rounded-md border border-green-500/20 overflow-hidden">
+                        <DataTable data={tableData || []} columns={columns || []} />
+                      </div>
                       {renderPagination()}
-                    </>
+                    </div>
                   )}
                 </CardContent>
               </Card>

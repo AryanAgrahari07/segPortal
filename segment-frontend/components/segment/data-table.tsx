@@ -74,14 +74,14 @@ export function DataTable({ data, columns }: DataTableProps) {
   };
 
   return (
-    <div className="overflow-auto max-h-[calc(100vh-25rem)]">
+    <div className="overflow-auto max-h-[calc(100vh-25rem)] custom-scrollbar table-scrollbar relative">
       <Table>
-        <TableHeader className="sticky top-0 bg-background">
-          <TableRow>
+        <TableHeader className="sticky top-0 bg-background z-10">
+          <TableRow className="border-b border-border/50">
             {tableColumns.map((column) => (
-              <TableHead key={column.name} className="whitespace-nowrap">
+              <TableHead key={column.name} className="whitespace-nowrap bg-background py-3">
                 <div className="flex items-center gap-1">
-                  <span>{column.name}</span>
+                  <span className="font-medium">{column.name}</span>
                   <span className="text-xs text-muted-foreground">
                     ({column.type.toLowerCase()})
                   </span>
@@ -92,9 +92,9 @@ export function DataTable({ data, columns }: DataTableProps) {
         </TableHeader>
         <TableBody>
           {data.map((row, index) => (
-            <TableRow key={`row-${index}`}>
+            <TableRow key={`row-${index}`} className="hover:bg-muted/30 transition-colors">
               {tableColumns.map((column) => (
-                <TableCell key={`${index}-${column.name}`} className="truncate max-w-xs">
+                <TableCell key={`${index}-${column.name}`} className="truncate max-w-xs py-2.5">
                   {renderCell(row[column.name], column.type)}
                 </TableCell>
               ))}
