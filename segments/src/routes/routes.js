@@ -8,7 +8,7 @@ const { refreshToken } = require("../controllers/refreshToken/refreshToken.js");
 const { getAllTables } = require("../controllers/allTables/tables.js");
 const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted } = require("../controllers/segments/segment.js");
 const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole } = require("../controllers/addUser/adduser.js");
-const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tabledata/tabledata.js");
+const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
 const filterGroupsController = require("../controllers/segments/filter_groups");
 const filtersController = require("../controllers/segments/filters");
 
