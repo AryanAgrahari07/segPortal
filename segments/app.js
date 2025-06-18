@@ -17,7 +17,7 @@ const { sanitizeInput } = require("./src/middleware/security.js");
 app.use(
   cors({
     origin: process.env.FRONTEND,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
