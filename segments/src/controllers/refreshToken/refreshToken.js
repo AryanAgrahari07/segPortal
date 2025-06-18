@@ -45,7 +45,7 @@ exports.refreshToken = async (req, res) => {
       res.cookie('refreshtoken', newRefreshToken, {
         httpOnly: false,
         secure: true,
-        sameSite: 'Lax',
+        sameSite: 'None',
         domain: process.env.COOKIE_DOMAIN,
         path: '/',
         maxAge: 20 * 60 * 1000, // 20 minutes
