@@ -187,7 +187,7 @@ exports.verifyOTP = async (req, res) => {
           res.cookie('sessionid', session.session_id, {
             httpOnly: false,
             secure: true,
-            sameSite: 'Lax',
+            sameSite: 'None',
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
             maxAge: 12 * 60 * 60 * 1000, // 12 hours
@@ -196,7 +196,7 @@ exports.verifyOTP = async (req, res) => {
           res.cookie('refreshtoken', refreshToken, {
             httpOnly: false,
             secure: true,
-            sameSite: 'Lax',
+            sameSite: 'None',
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
             maxAge: 20 * 60 * 1000, // 20 minutes
