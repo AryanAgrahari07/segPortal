@@ -151,7 +151,9 @@ exports.addUser = async (req, res) => {
         first_name: firstName,
         last_name: lastName,
         role,
-        is_active: isActive
+        is_active: isActive,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       },
       message: 'User created successfully'
     });

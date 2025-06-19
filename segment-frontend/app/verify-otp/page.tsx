@@ -46,7 +46,7 @@ export default function VerifyOTPPage() {
     setLoading(true)
     try {
       const response = await authService.verifyOTP(email, otp)
-      console.log("OTP verification response:", response);
+      // console.log("OTP verification response:", response);
       
       toast({
         title: "Success",
@@ -62,8 +62,8 @@ export default function VerifyOTPPage() {
       const userData = response.data || response;
       const token = response.token;
       
-      console.log("Token:", token);
-      console.log("User data:", userData);
+      // console.log("Token:", token);
+      // console.log("User data:", userData);
       
       // Set cookies for middleware
       const userRole = userData.role || 'user';

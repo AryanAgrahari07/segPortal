@@ -12,7 +12,7 @@ const escapeSQLString = (str) => {
  * @param {Object} filterGroup - Filter group with logic operator and filters
  * @returns {Object} Object with SQL WHERE clause and params array
  */
-const buildFilterCondition = (filterGroup) => {
+exports.buildFilterCondition = (filterGroup) => {
   if (!filterGroup || !filterGroup.filters || !filterGroup.filters.length) {
     return { sql: '', params: [] };
   }
@@ -185,7 +185,7 @@ exports.getTableData = async (req, res) => {
       
       // Process each filter group at the root level
       for (const group of filterGroups) {
-        const condition = buildFilterCondition(group);
+        const condition = this.buildFilterCondition(group);
         if (condition.sql) {
           rootConditions.push(`(${condition.sql})`);
         }
@@ -337,7 +337,7 @@ exports.getTableDataWithSegment = async (req, res) => {
           
           // Process each filter group
           for (const group of segmentConfig.filterGroups) {
-            const condition = buildFilterCondition(group);
+            const condition = this.buildFilterCondition(group);
             if (condition.sql) {
               rootConditions.push(`(${condition.sql})`);
             }

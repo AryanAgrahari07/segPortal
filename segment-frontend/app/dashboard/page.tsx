@@ -74,7 +74,7 @@ export default function DashboardPage() {
       // Load tables
       try {
         const tablesData = await dataService.getAllTables()
-        console.log("Tables API Response:", tablesData)
+        // console.log("Tables API Response:", tablesData)
 
         if (Array.isArray(tablesData)) {
           setTables(tablesData)
@@ -87,13 +87,14 @@ export default function DashboardPage() {
         }
 
         if (tablesData && Array.isArray(tablesData.tables)) {
-          console.log("Setting tables from tablesData.table:", tablesData.tables)
+          // console.log("Setting tables from tablesData.table:", tablesData.tables)
           setTables(tablesData.tables)
         } else if (tablesData && Array.isArray(tablesData)) {
-          console.log("Setting segments from direct array:", tablesData)
+          // console.log("Setting segments from direct array:", tablesData)
           setTables(tablesData)
         } else if (tablesData && (tablesData as any).data && Array.isArray((tablesData as any).data)) {
-          console.log("Setting tables from tablesData.data:", (tablesData as any).data)
+          const newLocal = "Setting tables from tablesData.data:"
+          // console.log(newLocal, (tablesData as any).data)
           setTables((tablesData as any).data)
         } else {
           console.error("No valid tables data structure found:", tablesData)
@@ -106,17 +107,17 @@ export default function DashboardPage() {
       // Load segments
       try {
         const segmentsData = await dataService.getAllSegments()
-        console.log("Segments API Response:", segmentsData)
+        // console.log("Segments API Response:", segmentsData)
 
         // Check different possible segment data formats
         if (segmentsData && Array.isArray(segmentsData.segments)) {
-          console.log("Setting segments from segmentsData.segments:", segmentsData.segments)
+          // console.log("Setting segments from segmentsData.segments:", segmentsData.segments)
           setSegments(segmentsData.segments)
         } else if (segmentsData && Array.isArray(segmentsData)) {
-          console.log("Setting segments from direct array:", segmentsData)
+          // console.log("Setting segments from direct array:", segmentsData)
           setSegments(segmentsData)
         } else if (segmentsData && (segmentsData as any).data && Array.isArray((segmentsData as any).data)) {
-          console.log("Setting segments from segmentsData.data:", (segmentsData as any).data)
+          // console.log("Setting segments from segmentsData.data:", (segmentsData as any).data)
           setSegments((segmentsData as any).data)
         } else {
           console.error("No valid segments data structure found:", segmentsData)
@@ -140,7 +141,7 @@ export default function DashboardPage() {
               created_at: new Date().toISOString(),
             },
           ]
-          console.log("Using mock segments:", mockSegments)
+          // console.log("Using mock segments:", mockSegments)
           setSegments(mockSegments)
         }
       } catch (segmentError) {

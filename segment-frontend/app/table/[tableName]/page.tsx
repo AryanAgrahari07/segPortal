@@ -68,11 +68,21 @@ interface SegmentData {
   startTime: string
   endTime: string
   segment_name?: string
-  segment_config?: any
+  segment_config?: SegmentConfig
   filter_groups?: any[]
   groupConditions?: string[]
   custom_sql?: string
   generated_sql?: string
+}
+
+interface SegmentConfig {
+  target_table: string;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  groupConditions?: string[];
+  filterGroups?: any[];
 }
 
 interface TableMetadataResponse {
@@ -205,7 +215,7 @@ const parseWhereClauseToFilters = (sql: string): any => {
     }
 
     const whereClause = whereMatch[1].trim();
-    console.log("Extracted WHERE clause:", whereClause);
+    // console.log("Extracted WHERE clause:", whereClause);
     
     // Simple parsing for basic conditions
     // This is a simplified approach - a real implementation would need a proper SQL parser
@@ -518,7 +528,11 @@ export default function TableDetailPage() {
 
   useEffect(() => {
     loadTableData()
-  }, [tableName, segmentId, pagination.page, pagination.pageSize])
+  }, [tableName, segmentId])
+
+  useEffect(() => {
+    executeQuery();
+  }, [pagination.page, pagination.pageSize])
 
   const loadTableData = async () => {
     try {
@@ -527,7 +541,7 @@ export default function TableDetailPage() {
       // Load table metadata
       try {
         const response = await dataService.getTableMetadata(tableName) as any;
-        console.log("Table metadata response:", response);
+        // console.log("Table metadata response:", response);
         
         // Extract columns from the response
         let columnsData: any[] = [];
@@ -588,7 +602,7 @@ export default function TableDetailPage() {
             };
           });
           
-          console.log("Formatted columns:", formattedColumns);
+          // console.log("Formatted columns:", formattedColumns);
           setColumns(formattedColumns);
         } else {
           console.error("No columns found in metadata:", response);
@@ -607,9 +621,9 @@ export default function TableDetailPage() {
       // If segment ID is provided, load segment data
       if (segmentId) {
         try {
-          console.log("Loading segment data for segment ID:", segmentId);
+          // console.log("Loading segment data for segment ID:", segmentId);
           const segmentResponse = await dataService.getSegmentById(segmentId, ["filter_groups", "filters"]);
-          console.log("Segment response:", segmentResponse);
+          // console.log("Segment response:", segmentResponse);
 
           if (!segmentResponse || !segmentResponse.data) {
             throw new Error("Invalid segment data received");
@@ -662,7 +676,7 @@ export default function TableDetailPage() {
 
             // Load table data with segment filters
             try {
-              console.log("Loading table data with segment filters");
+              // console.log("Loading table data with segment filters");
               
               // Format filters according to backend's expected format
               const filterQueryData = {
@@ -684,9 +698,9 @@ export default function TableDetailPage() {
                 pageSize: pagination.pageSize
               };
               
-              console.log("Sending filter data to load table data:", filterQueryData);
+              // console.log("Sending filter data to load table data:", filterQueryData);
               const tableDataResponse = await dataService.getTableData(tableName, filterQueryData);
-              console.log("Table data response with filters:", tableDataResponse);
+              // console.log("Table data response with filters:", tableDataResponse);
               
               // Process the response
               let tableRows = [];
@@ -855,7 +869,7 @@ export default function TableDetailPage() {
         // Load regular table data
         try {
           const response = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
-          console.log("Table data response:", response);
+          // console.log("Table data response:", response);
           
           // Handle nested response structure with rows property
           let tableRows = [];
@@ -885,7 +899,7 @@ export default function TableDetailPage() {
             }
           }
           
-          console.log("Processed table rows:", tableRows);
+          // console.log("Processed table rows:", tableRows);
           setTableData(Array.isArray(tableRows) ? tableRows : []);
           setPagination(prevPagination => ({
             ...prevPagination,
@@ -1088,15 +1102,83 @@ export default function TableDetailPage() {
     return `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`
   }
 
-  // Generate report statistics based on filtered data
-  const generateReportStats = (data: any[]) => {
-    if (!data || data.length === 0 || !columns || columns.length === 0) {
-      return {}
+  // Fetch insights data from the backend API
+  const fetchInsightsData = async () => {
+    if (!tableName) {
+      return;
     }
 
     try {
-      const stats: any = {
-        totalRecords: data.length,
+      setReportStats({}); // Clear previous stats
+      
+      let insightsResponse;
+      
+      // Use different approaches based on what we have
+      if (segmentId) {
+        // If we have a segment ID, use it to fetch insights
+        // console.log("Fetching insights using segment:", segmentId);
+        insightsResponse = await dataService.getTableInsightsWithSegment(tableName, segmentId);
+      } else if (customSql) {
+        // If we have custom SQL, use it
+        // console.log("Fetching insights using custom SQL");
+        insightsResponse = await dataService.getTableInsights(tableName, {
+          customSql
+        });
+      } else if (filterGroups && filterGroups.length > 0) {
+        // Format filters for the API
+        const formattedFilterGroups = filterGroups
+          .filter((group) => group.isEnabled !== false)
+          .map((group) => ({
+            logic_operator: group.condition === "NOT" ? "AND" : group.condition,
+            not: group.condition === "NOT",
+            filters: group.filters.map((filter) => ({
+              type: 'condition',
+              column: filter.column,
+              operator: mapOperatorToBackend(filter.operator),
+              value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                ? [filter.value, filter.value2] 
+                : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                  ? filter.value.split(',').map((v: string) => v.trim()) 
+                  : filter.value
+            }))
+          }));
+          
+        // console.log("Fetching insights using filter groups");
+        insightsResponse = await dataService.getTableInsights(tableName, {
+          filterGroups: formattedFilterGroups,
+          groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND']
+        });
+      } else {
+        // Fetch insights for the whole table without filters
+        // console.log("Fetching insights for entire table");
+        insightsResponse = await dataService.getTableInsights(tableName);
+      }
+      
+      // Process response
+      if (insightsResponse && insightsResponse.success && insightsResponse.data) {
+        // console.log("Insights data received:", insightsResponse.data);
+        setReportStats(insightsResponse.data);
+      } else {
+        console.error("Invalid insights response:", insightsResponse);
+        setReportStats({
+          totalRecords: tableData?.length || 0,
+          numericColumns: {},
+          categoricalColumns: {},
+          dateColumns: {},
+          summary: {
+            missingValues: {},
+            correlations: [],
+            mostCommonValues: [],
+            outliers: [],
+            distributions: {},
+            trends: {}
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching insights data:", error);
+      setReportStats({
+        totalRecords: tableData?.length || 0,
         numericColumns: {},
         categoricalColumns: {},
         dateColumns: {},
@@ -1108,458 +1190,15 @@ export default function TableDetailPage() {
           distributions: {},
           trends: {}
         }
-      }
-
-      // Process each column based on its type
-      columns.forEach(column => {
-        const colName = column.name
-        const colType = column.type
-
-        // Skip columns with no data
-        if (!data[0] || !data[0].hasOwnProperty(colName)) return
-
-        // Track missing values for all column types
-        const missingCount = data.filter(row => 
-          row[colName] === null || 
-          row[colName] === undefined || 
-          row[colName] === ""
-        ).length
-
-        stats.summary.missingValues[colName] = {
-          count: missingCount,
-          percentage: Number(((missingCount / data.length) * 100).toFixed(1))
-        }
-
-        // Process numeric columns (count, sum, avg, min, max, quartiles, standard deviation)
-        if (colType === "INTEGER" || colType === "DECIMAL" || colType === "NUMBER") {
-          const values = data.map(row => parseFloat(row[colName])).filter(val => !isNaN(val))
-          if (values.length === 0) return
-
-          // Sort for quartile calculations
-          const sortedValues = [...values].sort((a, b) => a - b)
-          const sum = values.reduce((acc, val) => acc + val, 0)
-          const avg = sum / values.length
-          const min = sortedValues[0]
-          const max = sortedValues[sortedValues.length - 1]
-          
-          // Calculate median (Q2)
-          const midIndex = Math.floor(sortedValues.length / 2)
-          const median = sortedValues.length % 2 === 0
-            ? (sortedValues[midIndex - 1] + sortedValues[midIndex]) / 2
-            : sortedValues[midIndex]
-          
-          // Calculate Q1 and Q3
-          const q1Index = Math.floor(sortedValues.length * 0.25)
-          const q3Index = Math.floor(sortedValues.length * 0.75)
-          const q1 = sortedValues[q1Index]
-          const q3 = sortedValues[q3Index]
-          
-          // Calculate standard deviation
-          const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length
-          const stdDev = Math.sqrt(variance)
-
-          // Calculate IQR and identify outliers
-          const iqr = q3 - q1
-          const lowerBound = q1 - 1.5 * iqr
-          const upperBound = q3 + 1.5 * iqr
-          const outliers = values.filter(val => val < lowerBound || val > upperBound)
-          
-          // Create distribution buckets for histogram data
-          const bucketCount = Math.min(10, Math.ceil(Math.sqrt(values.length)))
-          const bucketSize = (max - min) / bucketCount
-          const buckets = Array(bucketCount).fill(0).map((_, i) => ({
-            range: [Number((min + i * bucketSize).toFixed(2)), Number((min + (i + 1) * bucketSize).toFixed(2))],
-            count: 0
-          }))
-          
-          values.forEach(val => {
-            // Handle edge case for the max value
-            if (val === max) {
-              buckets[buckets.length - 1].count++
-              return
-            }
-            
-            const bucketIndex = Math.floor((val - min) / bucketSize)
-            if (bucketIndex >= 0 && bucketIndex < bucketCount) {
-              buckets[bucketIndex].count++
-            }
-          })
-
-          stats.numericColumns[colName] = {
-            count: values.length,
-            sum: Number(sum.toFixed(2)),
-            avg: Number(avg.toFixed(2)),
-            median: Number(median.toFixed(2)),
-            min: Number(min.toFixed(2)),
-            max: Number(max.toFixed(2)),
-            q1: Number(q1.toFixed(2)),
-            q3: Number(q3.toFixed(2)),
-            stdDev: Number(stdDev.toFixed(2)),
-            outlierCount: outliers.length,
-            outlierPercentage: Number(((outliers.length / values.length) * 100).toFixed(1)),
-            distribution: buckets
-          }
-          
-          // Add to summary.outliers if there are outliers
-          if (outliers.length > 0) {
-            stats.summary.outliers.push({
-              column: colName,
-              count: outliers.length,
-              percentage: Number(((outliers.length / values.length) * 100).toFixed(1)),
-              min: Number(Math.min(...outliers).toFixed(2)),
-              max: Number(Math.max(...outliers).toFixed(2))
-            })
-          }
-          
-          // Add distribution data
-          stats.summary.distributions[colName] = {
-            type: 'numeric',
-            buckets
-          }
-        }
-        // Process categorical columns (frequency distribution, entropy)
-        else if (colType === "STRING" || colType === "BOOLEAN") {
-          const freqMap: Record<string, number> = {}
-          let nullCount = 0
-          let emptyCount = 0
-          let totalValues = 0
-
-          data.forEach(row => {
-            const value = row[colName]
-            if (value === null || value === undefined) {
-              nullCount++
-              return
-            }
-            
-            const strValue = String(value).trim()
-            if (strValue === '') {
-              emptyCount++
-              return
-            }
-            
-            freqMap[strValue] = (freqMap[strValue] || 0) + 1
-            totalValues++
-          })
-
-          // Get all values sorted by frequency
-          const sortedValues = Object.entries(freqMap)
-            .sort((a, b) => b[1] - a[1])
-          
-          // Top values for this specific column
-          const topValues = sortedValues
-            .slice(0, 5)
-            .map(([value, count]) => ({
-              value,
-              count,
-              percentage: Number(((count / data.length) * 100).toFixed(1))
-            }))
-            
-          // Calculate entropy (measure of diversity)
-          let entropy = 0
-          if (totalValues > 0) {
-            sortedValues.forEach(([_, count]) => {
-              const p = count / totalValues
-              entropy -= p * Math.log2(p)
-            })
-          }
-
-          // Calculate "dominance" - how much the most common value dominates
-          const dominance = sortedValues.length > 0 
-            ? Number(((sortedValues[0][1] / totalValues) * 100).toFixed(1)) 
-            : 0
-
-          stats.categoricalColumns[colName] = {
-            uniqueValues: Object.keys(freqMap).length,
-            nullCount,
-            emptyCount,
-            topValues,
-            entropy: Number(entropy.toFixed(2)),
-            dominance,
-            diversity: sortedValues.length > 0 
-              ? Number(((Object.keys(freqMap).length / totalValues) * 100).toFixed(1))
-              : 0
-          }
-          
-          // Add top values to summary
-          if (topValues.length > 0) {
-            stats.summary.mostCommonValues.push({
-              column: colName,
-              values: topValues.slice(0, 3)
-            })
-          }
-          
-          // Add distribution data
-          stats.summary.distributions[colName] = {
-            type: 'categorical',
-            values: sortedValues.slice(0, 10).map(([value, count]) => ({
-              value, 
-              count,
-              percentage: Number(((count / data.length) * 100).toFixed(1))
-            }))
-          }
-        }
-        // Process date columns (range, distribution by year/month if meaningful)
-        else if (colType === "TIMESTAMP" || colType === "DATE") {
-          let minDate: string | null = null;
-          let maxDate: string | null = null;
-          let minTimestamp = Number.MAX_SAFE_INTEGER;
-          let maxTimestamp = 0;
-          let validDates = 0;
-          let invalidDates = 0;
-          
-          // For distribution analysis
-          const yearDistribution: Record<string, number> = {};
-          const monthDistribution: Record<string, number> = {};
-          const dayOfWeekDistribution: Record<string, number> = {};
-          const validDateObjects: Date[] = [];
-          
-          // Month names for better readability
-          const monthNames = [
-            "January", "February", "March", "April", "May", "June", 
-            "July", "August", "September", "October", "November", "December"
-          ];
-          
-          // Day names
-          const dayNames = [
-            "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-          ];
-
-          data.forEach(row => {
-            const dateStr = row[colName];
-            if (!dateStr) return;
-
-            try {
-              const date = new Date(dateStr);
-              if (!isNaN(date.getTime())) {
-                validDates++;
-                validDateObjects.push(date);
-                const timestamp = date.getTime();
-                const formattedDate = date.toISOString().split('T')[0];
-                
-                if (minDate === null || timestamp < minTimestamp) {
-                  minDate = formattedDate;
-                  minTimestamp = timestamp;
-                }
-                if (maxDate === null || timestamp > maxTimestamp) {
-                  maxDate = formattedDate;
-                  maxTimestamp = timestamp;
-                }
-                
-                // Track distribution by year
-                const year = date.getFullYear().toString();
-                yearDistribution[year] = (yearDistribution[year] || 0) + 1;
-                
-                // Track distribution by month
-                const month = monthNames[date.getMonth()];
-                monthDistribution[month] = (monthDistribution[month] || 0) + 1;
-                
-                // Track distribution by day of week
-                const dayOfWeek = dayNames[date.getDay()];
-                dayOfWeekDistribution[dayOfWeek] = (dayOfWeekDistribution[dayOfWeek] || 0) + 1;
-              } else {
-                invalidDates++;
-              }
-            } catch (e) {
-              invalidDates++;
-            }
-          });
-
-          if (validDates > 0 && minDate && maxDate) {
-            // Sort distributions
-            const sortedYears = Object.entries(yearDistribution)
-              .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-              
-            const sortedMonths = Object.entries(monthDistribution)
-              .sort((a, b) => {
-                const monthIndexA = monthNames.indexOf(a[0]);
-                const monthIndexB = monthNames.indexOf(b[0]);
-                return monthIndexA - monthIndexB;
-              });
-              
-            const sortedDays = Object.entries(dayOfWeekDistribution)
-              .sort((a, b) => {
-                const dayIndexA = dayNames.indexOf(a[0]);
-                const dayIndexB = dayNames.indexOf(b[0]);
-                return dayIndexA - dayIndexB;
-              });
-              
-            // Calculate date difference in days
-            const dateRange = Math.ceil((maxTimestamp - minTimestamp) / (1000 * 60 * 60 * 24));
-            
-            // Detect if data shows weekly patterns
-            let weeklyPattern = false;
-            if (sortedDays.length > 0) {
-              const dayValues = sortedDays.map(([_, count]) => count);
-              const avgCount = dayValues.reduce((a, b) => a + b, 0) / dayValues.length;
-              const maxDeviation = Math.max(...dayValues.map(v => Math.abs(v - avgCount)));
-              
-              // If max deviation is >20% from average, consider it a weekly pattern
-              weeklyPattern = maxDeviation > (0.2 * avgCount);
-            }
-            
-            // Detect if data shows yearly seasonality
-            let yearlyPattern = false;
-            if (sortedMonths.length > 6) { // Need sufficient months to detect pattern
-              const monthValues = sortedMonths.map(([_, count]) => count);
-              const avgCount = monthValues.reduce((a, b) => a + b, 0) / monthValues.length;
-              const maxDeviation = Math.max(...monthValues.map(v => Math.abs(v - avgCount)));
-              
-              // If max deviation is >30% from average, consider it a yearly pattern
-              yearlyPattern = maxDeviation > (0.3 * avgCount);
-            }
-            
-            // Detect any trends over time (increasing, decreasing, or stable)
-            let trend = "stable";
-            if (validDateObjects.length > 10) {
-              // Group by weeks or months for trend analysis
-              const isLongPeriod = dateRange > 90; // More than 3 months
-              const periodMap: Record<string, number> = {};
-              
-              validDateObjects.forEach(date => {
-                let periodKey;
-                if (isLongPeriod) {
-                  // Use month as period for long ranges
-                  periodKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                } else {
-                  // Use week number for shorter ranges
-                  const weekNumber = Math.floor((date.getTime() - minTimestamp) / (7 * 24 * 60 * 60 * 1000));
-                  periodKey = `week-${weekNumber}`;
-                }
-                periodMap[periodKey] = (periodMap[periodKey] || 0) + 1;
-              });
-              
-              // Sort periods chronologically
-              const sortedPeriods = Object.entries(periodMap)
-                .sort((a, b) => {
-                  if (isLongPeriod) {
-                    return a[0].localeCompare(b[0]);
-                  } else {
-                    return parseInt(a[0].split('-')[1]) - parseInt(b[0].split('-')[1]);
-                  }
-                });
-              
-              // Only analyze if we have at least 3 periods
-              if (sortedPeriods.length >= 3) {
-                // Get first and last period counts to determine trend
-                const firstPeriod = sortedPeriods[0][1];
-                const lastPeriod = sortedPeriods[sortedPeriods.length - 1][1];
-                const changePercent = ((lastPeriod - firstPeriod) / firstPeriod) * 100;
-                
-                if (changePercent > 20) {
-                  trend = "increasing";
-                } else if (changePercent < -20) {
-                  trend = "decreasing";
-                }
-              }
-            }
-
-            stats.dateColumns[colName] = {
-              validDates,
-              invalidDates,
-              nullPercentage: Number(((invalidDates / data.length) * 100).toFixed(1)),
-              minDate,
-              maxDate,
-              dateRange,
-              yearDistribution: sortedYears,
-              monthDistribution: sortedMonths,
-              dayOfWeekDistribution: sortedDays,
-              weeklyPattern,
-              yearlyPattern,
-              trend
-            };
-            
-            // Add to trends summary if there's a notable trend
-            if (trend !== "stable") {
-              stats.summary.trends[colName] = {
-                type: 'date',
-                trend,
-                period: dateRange > 90 ? 'monthly' : 'weekly'
-              };
-            }
-          }
-        }
       });
-
-      // Find correlations between numeric columns
-      // Note: This is a simple correlation calculation and could be enhanced
-      const numericColumnNames = Object.keys(stats.numericColumns);
-      if (numericColumnNames.length >= 2) {
-        for (let i = 0; i < numericColumnNames.length; i++) {
-          for (let j = i + 1; j < numericColumnNames.length; j++) {
-            const col1 = numericColumnNames[i];
-            const col2 = numericColumnNames[j];
-            
-            // Get all rows where both values are present
-            const validRows = data.filter(row => 
-              row[col1] !== null && 
-              row[col1] !== undefined && 
-              !isNaN(parseFloat(row[col1])) &&
-              row[col2] !== null && 
-              row[col2] !== undefined && 
-              !isNaN(parseFloat(row[col2]))
-            );
-            
-            if (validRows.length < 10) continue; // Need enough data points
-            
-            // Calculate correlation coefficient (Pearson)
-            const values1 = validRows.map(row => parseFloat(row[col1]));
-            const values2 = validRows.map(row => parseFloat(row[col2]));
-            
-            const mean1 = values1.reduce((a, b) => a + b, 0) / values1.length;
-            const mean2 = values2.reduce((a, b) => a + b, 0) / values2.length;
-            
-            let numerator = 0;
-            let denom1 = 0;
-            let denom2 = 0;
-            
-            for (let k = 0; k < values1.length; k++) {
-              const diff1 = values1[k] - mean1;
-              const diff2 = values2[k] - mean2;
-              
-              numerator += diff1 * diff2;
-              denom1 += diff1 * diff1;
-              denom2 += diff2 * diff2;
-            }
-            
-            const correlation = numerator / (Math.sqrt(denom1) * Math.sqrt(denom2));
-            
-            // Only add significant correlations
-            if (Math.abs(correlation) > 0.3) {
-              stats.summary.correlations.push({
-                columns: [col1, col2],
-                correlation: Number(correlation.toFixed(2)),
-                strength: Math.abs(correlation) > 0.7 ? 'strong' : 
-                          Math.abs(correlation) > 0.5 ? 'moderate' : 'weak',
-                direction: correlation > 0 ? 'positive' : 'negative'
-              });
-            }
-          }
-        }
-      }
-      
-      // Sort correlations by strength
-      stats.summary.correlations.sort((a: any, b: any) => Math.abs(b.correlation) - Math.abs(a.correlation));
-      
-      // Sort most common values by percentage
-      stats.summary.mostCommonValues.sort((a: any, b: any) => {
-        return b.values[0].percentage - a.values[0].percentage;
-      });
-      
-      // Sort outliers by percentage
-      stats.summary.outliers.sort((a: any, b: any) => b.percentage - a.percentage);
-
-      return stats;
-    } catch (error) {
-      console.error("Error generating report stats:", error);
-      return {};
     }
   }
 
-  // Update report stats whenever tableData changes
+  // Update report stats whenever tableData changes by fetching insights from backend
   useEffect(() => {
     if (tableData && tableData.length > 0) {
-      const stats = generateReportStats(tableData)
-      setReportStats(stats)
+      // Call fetchInsightsData instead of generating stats on the frontend
+      fetchInsightsData();
     }
   }, [tableData])
 
@@ -1623,9 +1262,8 @@ export default function TableDetailPage() {
           totalPages: paginationData.totalPages
         }));
         
-        // Generate report stats
-        const stats = generateReportStats(Array.isArray(customTableRows) ? customTableRows : [])
-        setReportStats(stats)
+        // Fetch insights data from backend
+        fetchInsightsData();
         
         toast({
           title: "Query Executed",
@@ -1663,7 +1301,7 @@ export default function TableDetailPage() {
           pageSize: pagination.pageSize
         };
         
-        console.log("Executing query with filters:", filterQueryData);
+        // console.log("Executing query with filters:", filterQueryData);
         
         // Execute query
         const filterResponse = await dataService.getTableData(tableName, filterQueryData);
@@ -1701,9 +1339,8 @@ export default function TableDetailPage() {
           totalPages: paginationData.totalPages
         }));
         
-        // Generate report stats
-        const stats = generateReportStats(Array.isArray(filterTableRows) ? filterTableRows : [])
-        setReportStats(stats)
+        // Fetch insights data from backend
+        fetchInsightsData();
         
         toast({
           title: "Query Executed",
@@ -1744,10 +1381,10 @@ export default function TableDetailPage() {
         const cumulativeBetweenConditions = betweenGroupConditions.slice(0, i);
         
         const cumulativeQuery = {
-          filterGroups: cumulativeGroups.map((group) => ({
+          filterGroups: cumulativeGroups.map((group: FilterGroup) => ({
             logic_operator: group.condition === "NOT" ? "AND" : group.condition,
             not: group.condition === "NOT",
-            filters: group.filters.map((filter) => ({
+            filters: group.filters.map((filter: any) => ({
               type: 'condition',
               column: filter.column,
               operator: mapOperatorToBackend(filter.operator),
@@ -1956,9 +1593,9 @@ export default function TableDetailPage() {
       
       // Check if we're editing an existing segment
       if (segmentId) {
-        console.log("Updating existing segment:", segmentId);
+        // console.log("Updating existing segment:", segmentId);
         result = await dataService.updateSegment(segmentId, segmentPayload);
-        console.log("Segment update result:", result);
+        // console.log("Segment update result:", result);
         
         toast({
           title: "Success",
@@ -1966,9 +1603,9 @@ export default function TableDetailPage() {
         });
       } else {
         // Creating a new segment
-        console.log("Creating new segment with payload:", segmentPayload);
+        // console.log("Creating new segment with payload:", segmentPayload);
         result = await dataService.createSegment(segmentPayload);
-        console.log("Segment creation result:", result);
+        // console.log("Segment creation result:", result);
         
         toast({
           title: "Success",
@@ -2153,7 +1790,9 @@ export default function TableDetailPage() {
                 <div className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 rounded-md p-4 border border-blue-500/20">
                   <h4 className="text-base font-medium mb-3 flex items-center">
                     <ArrowLeft className={`h-4 w-4 mr-2 text-blue-500 ${
-                      Object.values(reportStats.summary.trends)[0]?.trend === 'increasing' 
+                      reportStats.summary?.trends && 
+                      Object.values(reportStats.summary.trends || {}).length > 0 &&
+                      (Object.values(reportStats.summary.trends || {})[0] as any)?.trend === 'increasing' 
                         ? 'rotate-45' 
                         : 'rotate-135'
                     }`} />
@@ -2904,7 +2543,7 @@ export default function TableDetailPage() {
 
               {/* Report Overview - Separate Card */}
               {tableData && tableData.length > 0 && (
-                <Card className="border border-secondary/20 bg-gradient-to-br from-secondary/5 to-secondary/10">
+                <Card className="border overflow-y-auto max-h-[calc(100vh-17rem)] custom-scrollbar border-secondary/20 bg-gradient-to-br from-secondary/5 to-secondary/10">
                   <div className="px-4 py-3 flex items-center justify-between border-b border-secondary/20">
                     <h3 className="text-base flex items-center font-medium">
                       <div className="h-6 w-6 rounded-md bg-secondary/10 flex items-center justify-center mr-2">

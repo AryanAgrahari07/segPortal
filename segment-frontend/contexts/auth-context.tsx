@@ -51,13 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Main token check and refresh logic
     const checkAndRefreshToken = async () => {
       try {
-        console.log("Checking token:", token)
-        console.log("Token expired:", authService.isTokenExpired(token))
-        console.log("Token needs refresh:", authService.needsRefresh(token, REFRESH_BUFFER_TIME))
+        // console.log("Checking token:", token)
+        // console.log("Token expired:", authService.isTokenExpired(token))
+        // console.log("Token needs refresh:", authService.needsRefresh(token, REFRESH_BUFFER_TIME))
 
         // If access token is completely expired
         if (authService.isTokenExpired(token)) {
-          console.log("Access token expired, attempting refresh");
+          // console.log("Access token expired, attempting refresh");
           const refreshed = await refreshToken();
           if (!refreshed) {
             handleSessionExpired("Your session has expired");
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // If access token needs proactive refresh
         if (authService.needsRefresh(token, REFRESH_BUFFER_TIME)) {
-          console.log("Access token near expiry, refreshing proactively");
+          // console.log("Access token near expiry, refreshing proactively");
           await refreshToken();
         }
       } catch (error) {
@@ -169,8 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set cookies for middleware with user role
       authService.setCookies(userToken, user.role || 'user');
       
-      console.log("Auth context - Token saved:", userToken)
-      console.log("Auth context - User saved:", user)
+      // console.log("Auth context - Token saved:", userToken)
+      // console.log("Auth context - User saved:", user)
     } else {
       console.error("Invalid user data received", userData)
       console.error("Failed to process login data")

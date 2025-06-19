@@ -7,6 +7,7 @@ const cors = require("cors");
 const PORT = process.env.PORT || 4444;
 const cookieParser = require("cookie-parser");
 const { connect } = require("./src/database/database.js");
+const DatabaseInitializer = require("./src/database/init");
 const { sanitizeInput } = require("./src/middleware/security.js");
 
 // if (!process.env.FRONTEND) {
@@ -34,6 +35,9 @@ const startServer = async () => {
   try {
     // Connect to database
     await connect();
+
+    // Initialize database tables
+    await DatabaseInitializer.initializeDatabase();
 
     // Start listening
     app.listen(PORT, () => {
