@@ -117,8 +117,8 @@ exports.getTableData = async (req, res) => {
     const offset = (page - 1) * pageSize;
     
     // Get sorting parameters
-    const sortColumn = req.query.sortColumn || req.body.sortColumn || 'created_at';
-    const sortOrder = (req.query.sortOrder || req.body.sortOrder || 'desc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    const sortColumn = req.query.sortColumn || req.body.sortColumn ;
+    const sortOrder = (req.query.sortOrder || req.body.sortOrder || 'asc').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
     
     // Get table name
     const { tableName } = req.params;
@@ -226,8 +226,14 @@ exports.getTableData = async (req, res) => {
       }
     }
     
-    // Apply sorting and pagination to data query
-    dataQuery += ` ORDER BY ${sortColumn} ${sortOrder} LIMIT ${pageSize} OFFSET ${offset}`;
+    if(sortColumn && sortOrder){
+      // Apply sorting and pagination to data query
+      dataQuery += ` ORDER BY ${sortColumn} ${sortOrder}`;
+    }
+    
+    if(pageSize && page){
+      dataQuery += ` LIMIT ${pageSize} OFFSET ${offset}`;
+    }
     
     console.log('Executing count query:', countQuery);
     console.log('Executing data query:', dataQuery);

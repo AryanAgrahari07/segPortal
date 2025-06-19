@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Database, Filter, Search, Calendar, User, Play, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, Database, Filter, Search, Calendar, User, Play, ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { dataService } from "@/services/data-service"
@@ -24,6 +24,8 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
 interface Table {
   tableName: string
@@ -53,10 +55,13 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [tablesPagination, setTablesPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
   const [segmentsPagination, setSegmentsPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [selectedTable, setSelectedTable] = useState<string>("")
   const { toast } = useToast()
   const { user } = useAuth()
   const searchParams = useSearchParams()
-  const defaultTab = searchParams?.get("tab") || "tables"
+  const router = useRouter()
+  const defaultTab = searchParams?.get("tab") || "segments"
 
   useEffect(() => {
     loadData()
@@ -416,6 +421,20 @@ export default function DashboardPage() {
     )
   }
 
+  const handleCreateSegment = () => {
+    if (!selectedTable) {
+      toast({
+        title: "Error",
+        description: "Please select a table first",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    router.push(`/table/${selectedTable}`)
+    setShowCreateDialog(false)
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -443,74 +462,22 @@ export default function DashboardPage() {
 
         <Tabs defaultValue={defaultTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="tables">Tables</TabsTrigger>
             <TabsTrigger value="segments">Segments</TabsTrigger>
+            <TabsTrigger value="tables">Tables</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="tables" className="space-y-4">
-            {filteredTables.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tables</CardTitle>
-                  <CardDescription>Available database tables</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Table Name</TableHead>
-                        <TableHead>Database</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedTables.map((table, index) => (
-                        <TableRow key={`table-${index}`}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center space-x-2">
-                              <Database className="h-4 w-4 text-primary" />
-                              <span>{table.tableName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{table.database || "Default"}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {table.isTemporary ? "Temporary" : "Table"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Link href={`/table/${table.tableName}`}>
-                              <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                                View
-                              </Badge>
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  
-                  {filteredTables.length > 0 && renderTablesPagination()}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="text-center py-12">
-                <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No tables found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm ? "Try adjusting your search terms." : "No tables available in the database."}
-                </p>
-              </div>
-            )}
-          </TabsContent>
 
           <TabsContent value="segments" className="space-y-4">
             {filteredSegments.length > 0 ? (
               <Card>
-                <CardHeader>
-                  <CardTitle>Segments</CardTitle>
-                  <CardDescription>Manage your data segments and filters</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Segments</CardTitle>
+                    <CardDescription className="mt-1.5">Manage your data segments and filters</CardDescription>
+                  </div>
+                  <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1">
+                    <Plus className="h-4 w-4" />
+                    Create Segment
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -574,8 +541,112 @@ export default function DashboardPage() {
               <div className="text-center py-12">
                 <Filter className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No segments found</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground mb-4">
                   {searchTerm ? "Try adjusting your search terms." : "No segments have been created yet."}
+                </p>
+                <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1">
+                  <Plus className="h-4 w-4" />
+                  Create Segment
+                </Button>
+              </div>
+            )}
+
+            {/* Create Segment Dialog */}
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Segment</DialogTitle>
+                  <DialogDescription>
+                    Select a table to create a new segment with filters.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="table-select" className="text-right">
+                      Table
+                    </Label>
+                    <Select
+                      value={selectedTable}
+                      onValueChange={setSelectedTable}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a table" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[200px] overflow-y-auto">
+                        {tables.map((table) => (
+                          <SelectItem key={table.tableName} value={table.tableName}>
+                            {table.tableName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateSegment}>
+                    Continue
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+          <TabsContent value="tables" className="space-y-4">
+            {filteredTables.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tables</CardTitle>
+                  <CardDescription>Available database tables</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Table Name</TableHead>
+                        <TableHead>Database</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedTables.map((table, index) => (
+                        <TableRow key={`table-${index}`}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center space-x-2">
+                              <Database className="h-4 w-4 text-primary" />
+                              <span>{table.tableName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{table.database || "Default"}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {table.isTemporary ? "Temporary" : "Table"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/table/${table.tableName}`}>
+                              <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                                View
+                              </Badge>
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  
+                  {filteredTables.length > 0 && renderTablesPagination()}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="text-center py-12">
+                <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No tables found</h3>
+                <p className="text-muted-foreground">
+                  {searchTerm ? "Try adjusting your search terms." : "No tables available in the database."}
                 </p>
               </div>
             )}

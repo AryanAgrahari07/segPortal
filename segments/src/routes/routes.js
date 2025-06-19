@@ -7,8 +7,8 @@ const { verifyToken } = require("../middleware/auth.js");
 const { refreshToken } = require("../controllers/refreshToken/refreshToken.js");
 const { getAllTables } = require("../controllers/allTables/tables.js");
 const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted } = require("../controllers/segments/segment.js");
-const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole } = require("../controllers/adduser/adduser.js");
-const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tabledata/tabledata.js");
+const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole } = require("../controllers/addUser/adduser.js");
+const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
 const filterGroupsController = require("../controllers/segments/filter_groups");
 const filtersController = require("../controllers/segments/filters");
 
@@ -61,5 +61,10 @@ router.get("/check", verifyToken, sanitizeInput, (req, res) => {
         message: "token is valid",
     });
 });
+
+// Table data routes
+router.get('/table/:tableName/metadata', verifyToken, getTableMetadata);
+router.post('/table/:tableName/data', verifyToken, getTableData);
+router.get('/table/:tableName/segment/:segmentId', verifyToken, getTableDataWithSegment);
 
 module.exports = router;
