@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 4444;
 const cookieParser = require("cookie-parser");
 const { connect } = require("./src/database/database.js");
 const { sanitizeInput } = require("./src/middleware/security.js");
+const DatabaseInitializer = require("./src/database/init");
 
 // if (!process.env.FRONTEND) {
 //     throw new Error("FRONTEND URL not defined in environment variables");
@@ -34,6 +35,9 @@ const startServer = async () => {
   try {
     // Connect to database
     await connect();
+
+    // Initialize database tables
+    await DatabaseInitializer.initializeDatabase();
 
     // Start listening
     app.listen(PORT, () => {
