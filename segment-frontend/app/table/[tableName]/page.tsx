@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -43,7 +42,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 // Import required types from react-day-picker
-import { DayPicker, CaptionProps } from "react-day-picker"
 
 interface Column {
   name: string
@@ -73,6 +71,7 @@ interface SegmentData {
   groupConditions?: string[]
   custom_sql?: string
   generated_sql?: string
+  status?: string // Add this line
 }
 
 interface SegmentConfig {
@@ -85,57 +84,6 @@ interface SegmentConfig {
   filterGroups?: any[];
 }
 
-interface TableMetadataResponse {
-  success?: boolean;
-  data?: {
-    tableName: string;
-    columns: Array<{
-      col_name?: string;
-      name?: string;
-      data_type?: string;
-      type?: string;
-      nullable?: boolean;
-      comment?: string | null;
-    }>;
-  };
-  message?: string;
-}
-
-interface ParsedFilter {
-  column: string;
-  operator: string;
-  value: any;
-  value2?: any;
-}
-
-interface ParsedFilterGroup {
-  logic_operator: 'AND' | 'OR';
-  filters: ParsedFilter[];
-}
-
-interface ApiFilterGroup {
-  group_name: string
-  group_order: number
-  group_condition: "AND" | "OR" 
-  description?: string
-  not?: boolean
-  between_group_condition?: string
-  filters: {
-    column_name: string
-    column_data_type: string
-    filter_operator: string
-    filter_value: any
-    filter_value_2?: any
-    filter_order: number
-    is_active: boolean
-  }[]
-}
-
-const convertSqlToFilters = (sql: string): any[] => {
-  // This is a placeholder function that doesn't actually parse SQL
-  // Instead, we'll send the raw SQL to the backend
-  return [];
-};
 
 // Define gradient card styles for consistent UI
 const gradientCardStyles = cva(
@@ -205,120 +153,6 @@ const validateSql = (sql: string, tableName: string): { isValid: boolean; error?
   }
 };
 
-// Update the parseWhereClauseToFilters function to handle parentheses properly
-const parseWhereClauseToFilters = (sql: string): any => {
-  try {
-    // Extract WHERE clause
-    const whereMatch = sql.toLowerCase().match(/\s+where\s+(.*?)(?:\s+order\s+by|\s+group\s+by|\s+limit|\s*$)/i);
-    if (!whereMatch || !whereMatch[1]) {
-      return { filterGroups: [] };
-    }
-
-    const whereClause = whereMatch[1].trim();
-    // console.log("Extracted WHERE clause:", whereClause);
-    
-    // Simple parsing for basic conditions
-    // This is a simplified approach - a real implementation would need a proper SQL parser
-    
-    // Check for AND/OR conditions
-    let logicOperator = 'AND';
-    if (whereClause.toLowerCase().includes(' or ')) {
-      logicOperator = 'OR';
-    }
-    
-    // Split by AND or OR (this is simplified and won't handle nested conditions properly)
-    const separator = logicOperator === 'AND' ? /\s+and\s+/i : /\s+or\s+/i;
-    const conditions = whereClause.split(separator);
-    
-    // Parse each condition into a filter
-    const filters = conditions.map(condition => {
-      // Remove surrounding parentheses if present
-      let trimmedCondition = condition.trim();
-      trimmedCondition = trimmedCondition.replace(/^\s*\(\s*|\s*\)\s*$/g, '');
-      
-      // Handle various operators
-      let column = '';
-      let operator = '';
-      let value: any = '';
-      
-      // Check for different operators
-      if (trimmedCondition.includes('=')) {
-        [column, value] = trimmedCondition.split('=').map(s => s.trim());
-        operator = 'equals';
-      } else if (trimmedCondition.includes('!=')) {
-        [column, value] = trimmedCondition.split('!=').map(s => s.trim());
-        operator = 'notEquals';
-      } else if (trimmedCondition.includes('>=')) {
-        [column, value] = trimmedCondition.split('>=').map(s => s.trim());
-        operator = 'greaterThanOrEqual';
-      } else if (trimmedCondition.includes('<=')) {
-        [column, value] = trimmedCondition.split('<=').map(s => s.trim());
-        operator = 'lessThanOrEqual';
-      } else if (trimmedCondition.includes('>')) {
-        [column, value] = trimmedCondition.split('>').map(s => s.trim());
-        operator = 'greaterThan';
-      } else if (trimmedCondition.includes('<')) {
-        [column, value] = trimmedCondition.split('<').map(s => s.trim());
-        operator = 'lessThan';
-      } else if (trimmedCondition.toLowerCase().includes(' like ')) {
-        [column, value] = trimmedCondition.split(/\s+like\s+/i).map(s => s.trim());
-        operator = 'contains';
-        // Remove % wildcards
-        value = value.replace(/^'%|%'$/g, '').replace(/^"|"$/g, '');
-      } else if (trimmedCondition.toLowerCase().includes(' in ')) {
-        [column, value] = trimmedCondition.split(/\s+in\s+/i).map(s => s.trim());
-        operator = 'in';
-        // Extract values from IN clause
-        const inMatch = value.match(/\(\s*(.*?)\s*\)/);
-        if (inMatch && inMatch[1]) {
-          value = inMatch[1].split(',').map((v: string) => 
-            v.trim().replace(/^'|'$/g, '').replace(/^"|"$/g, '')
-          );
-        }
-      } else if (trimmedCondition.toLowerCase().includes(' between ')) {
-        const betweenMatch = trimmedCondition.match(/(.+?)\s+between\s+(.+?)\s+and\s+(.+)/i);
-        if (betweenMatch) {
-          column = betweenMatch[1].trim();
-          operator = 'between';
-          const val1 = betweenMatch[2].trim().replace(/^'|'$/g, '').replace(/^"|"$/g, '');
-          const val2 = betweenMatch[3].trim().replace(/^'|'$/g, '').replace(/^"|"$/g, '');
-          value = [val1, val2];
-        }
-      } else if (trimmedCondition.toLowerCase().includes(' is null')) {
-        column = trimmedCondition.split(/\s+is\s+null/i)[0].trim();
-        operator = 'isNull';
-      } else if (trimmedCondition.toLowerCase().includes(' is not null')) {
-        column = trimmedCondition.split(/\s+is\s+not\s+null/i)[0].trim();
-        operator = 'isNotNull';
-      }
-      
-      // Clean up values - remove quotes
-      if (typeof value === 'string') {
-        value = value.replace(/^'|'$/g, '').replace(/^"|"$/g, '');
-      }
-      
-      // Clean up column name - remove any remaining parentheses
-      column = column.replace(/[()]/g, '').trim();
-      
-      return {
-        type: 'condition',
-        column,
-        operator,
-        value
-      };
-    });
-    
-    return {
-      filterGroups: [{
-        logic_operator: logicOperator,
-        filters: filters.filter(f => f.column && f.operator)
-      }]
-    };
-  } catch (error) {
-    console.error("Error parsing SQL to filters:", error);
-    return { filterGroups: [] };
-  }
-};
 
 // Add a DatePicker component function at the appropriate place, before the TableDetailPage component
 function DatePicker({ 
@@ -505,6 +339,7 @@ export default function TableDetailPage() {
     endDate: "",
     startTime: "00:00",
     endTime: "23:59",
+    status: "active" // Default to active for new segments
   })
   const [loading, setLoading] = useState(true)
   const [executing, setExecuting] = useState(false)
@@ -514,9 +349,11 @@ export default function TableDetailPage() {
   const [customSql, setCustomSql] = useState("")
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showReportOverview, setShowReportOverview] = useState(false)
-  const [reportStats, setReportStats] = useState<any>({})
   const [showDataTable, setShowDataTable] = useState(true)
   const [filterGroupRowCounts, setFilterGroupRowCounts] = useState<Record<string, number>>({})
+  const [tableLoading, setTableLoading] = useState(false)
+  const [uniqueEmails, setUniqueEmails] = useState<number | null>(null)
+  const [hasEmailColumn, setHasEmailColumn] = useState<boolean>(false)
   
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -531,12 +368,145 @@ export default function TableDetailPage() {
   }, [tableName, segmentId])
 
   useEffect(() => {
-    executeQuery();
+    // Only execute query when pagination changes, but don't reset page number here
+    // This effect is for pagination navigation only
+    if (!loading) { // Prevent initial double-loading
+      const fetchPageData = async () => {
+        setTableLoading(true);
+        try {
+          if (customSql) {
+            // Execute query with custom SQL for the new page
+            const customResponse = await dataService.getTableData(tableName, { 
+              customSql,
+              filterGroups: [],
+              page: pagination.page,
+              pageSize: pagination.pageSize
+            });
+            
+            // Process response
+            let customTableRows: any[] = [];
+            let paginationData = {
+              page: pagination.page,
+              pageSize: pagination.pageSize,
+              total: 0,
+              totalPages: 1
+            };
+            
+            if (customResponse && typeof customResponse === 'object') {
+              if (customResponse.success && customResponse.data) {
+                customTableRows = customResponse.data.rows || [];
+                if (customResponse.data.pagination) {
+                  paginationData = customResponse.data.pagination;
+                }
+                // Get unique email count if available
+                if (customResponse.data.uniqueEmails !== undefined) {
+                  setUniqueEmails(customResponse.data.uniqueEmails);
+                  // If we got a uniqueEmails response (even if 0), we know there's an email column
+                  setHasEmailColumn(true);
+                } else {
+                  // If uniqueEmails is not in the response, there's likely no email column
+                  setHasEmailColumn(false);
+                }
+              } else if (customResponse.rows) {
+                customTableRows = customResponse.rows;
+              } else if (Array.isArray(customResponse)) {
+                customTableRows = customResponse;
+              }
+            }
+            
+            setTableData(Array.isArray(customTableRows) ? customTableRows : []);
+            setPagination(prevPagination => ({
+              ...prevPagination,
+              total: paginationData.total,
+              totalPages: paginationData.totalPages
+            }));
+          } else {
+            // Format filters for the new page
+            const filterQueryData = {
+              filterGroups: filterGroups
+                .filter((group) => group.isEnabled !== false)
+                .map((group) => ({
+                  logic_operator: group.condition === "NOT" ? "AND" : group.condition,
+                  not: group.condition === "NOT",
+                  filters: group.filters.map((filter) => ({
+                    type: 'condition',
+                    column: filter.column,
+                    operator: mapOperatorToBackend(filter.operator),
+                    value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                      ? [filter.value, filter.value2] 
+                      : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                        ? filter.value.split(',').map((v: string) => v.trim()) 
+                        : filter.value
+                  }))
+                })),
+              groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
+              page: pagination.page,
+              pageSize: pagination.pageSize
+            };
+            
+            // Execute query for the new page
+            const filterResponse = await dataService.getTableData(tableName, filterQueryData);
+            
+            // Process response
+            let filterTableRows: any[] = [];
+            let paginationData = {
+              page: pagination.page,
+              pageSize: pagination.pageSize,
+              total: 0,
+              totalPages: 1
+            };
+            
+            if (filterResponse && typeof filterResponse === 'object') {
+              if (filterResponse.success && filterResponse.data) {
+                filterTableRows = filterResponse.data.rows || [];
+                if (filterResponse.data.pagination) {
+                  paginationData = filterResponse.data.pagination;
+                }
+                // Get unique email count if available
+                if (filterResponse.data.uniqueEmails !== undefined) {
+                  setUniqueEmails(filterResponse.data.uniqueEmails);
+                  // If we got a uniqueEmails response (even if 0), we know there's an email column
+                  setHasEmailColumn(true);
+                } else {
+                  // If uniqueEmails is not in the response, there's likely no email column
+                  setHasEmailColumn(false);
+                }
+              } else if (filterResponse.rows) {
+                filterTableRows = filterResponse.rows;
+              } else if (Array.isArray(filterResponse)) {
+                filterTableRows = filterResponse;
+              }
+            }
+            
+            setTableData(Array.isArray(filterTableRows) ? filterTableRows : []);
+            setPagination(prevPagination => ({
+              ...prevPagination,
+              page: paginationData.page,
+              pageSize: paginationData.pageSize,
+              total: paginationData.total,
+              totalPages: paginationData.totalPages
+            }));
+          }
+        } catch (error: any) {
+          console.error("Error fetching page data:", error);
+          toast({
+            title: "Error",
+            description: error.message || "Failed to fetch page data",
+            variant: "destructive",
+          });
+        } finally {
+          setTableLoading(false);
+        }
+      };
+      
+      fetchPageData();
+    }
   }, [pagination.page, pagination.pageSize])
 
   const loadTableData = async () => {
     try {
       setLoading(true);
+      setTableLoading(true);
 
       // Load table metadata
       try {
@@ -602,15 +572,22 @@ export default function TableDetailPage() {
             };
           });
           
+          // Check if there's an email column
+          const emailColumnPattern = /email|e_mail|mail|email_address/i;
+          const hasEmail = formattedColumns.some(col => emailColumnPattern.test(col.name));
+          setHasEmailColumn(hasEmail);
+          
           // console.log("Formatted columns:", formattedColumns);
           setColumns(formattedColumns);
         } else {
           console.error("No columns found in metadata:", response);
           setColumns([]);
+          setHasEmailColumn(false);
         }
       } catch (metadataError) {
         console.error("Error loading table metadata:", metadataError);
         setColumns([]);
+        setHasEmailColumn(false);
         toast({
           title: "Error",
           description: "Failed to load table metadata",
@@ -664,6 +641,7 @@ export default function TableDetailPage() {
               endDate: segment.segment_config?.end_date || "",
               startTime: segment.segment_config?.start_time || "00:00",
               endTime: segment.segment_config?.end_time || "23:59",
+              status: segment.status || "active" // Add this line to preserve the segment status
             });
 
             // Set custom SQL if available
@@ -721,6 +699,12 @@ export default function TableDetailPage() {
                   if (tableDataResponse.data.pagination) {
                     paginationData = tableDataResponse.data.pagination;
                   }
+                  
+                  // Get unique email count if available
+                  if (tableDataResponse.data.uniqueEmails !== undefined) {
+                    setUniqueEmails(tableDataResponse.data.uniqueEmails);
+                    setHasEmailColumn(true);
+                  }
                 } else if (tableDataResponse.rows) {
                   tableRows = tableDataResponse.rows;
                 } else if (Array.isArray(tableDataResponse)) {
@@ -761,6 +745,12 @@ export default function TableDetailPage() {
                   if (data.success && data.data) {
                     tableRows = data.data.rows || [];
                     paginationData = data.data.pagination || paginationData;
+                    
+                    // Get unique email count if available
+                    if (data.data.uniqueEmails !== undefined) {
+                      setUniqueEmails(data.data.uniqueEmails);
+                      setHasEmailColumn(true);
+                    }
                   } else if (data.rows) {
                     tableRows = data.rows;
                   } else if (Array.isArray(data)) {
@@ -801,6 +791,12 @@ export default function TableDetailPage() {
                 if (data.success && data.data) {
                   tableRows = data.data.rows || [];
                   paginationData = data.data.pagination || paginationData;
+                  
+                  // Get unique email count if available
+                  if (data.data.uniqueEmails !== undefined) {
+                    setUniqueEmails(data.data.uniqueEmails);
+                    setHasEmailColumn(true);
+                  }
                 } else if (data.rows) {
                   tableRows = data.rows;
                 } else if (Array.isArray(data)) {
@@ -845,6 +841,12 @@ export default function TableDetailPage() {
               if (data.success && data.data) {
                 tableRows = data.data.rows || [];
                 paginationData = data.data.pagination || paginationData;
+                
+                // Get unique email count if available
+                if (data.data.uniqueEmails !== undefined) {
+                  setUniqueEmails(data.data.uniqueEmails);
+                  setHasEmailColumn(true);
+                }
               } else if (data.rows) {
                 tableRows = data.rows;
               } else if (Array.isArray(data)) {
@@ -889,6 +891,12 @@ export default function TableDetailPage() {
               if (response.data.pagination) {
                 paginationData = response.data.pagination;
               }
+              
+              // Get unique email count if available
+              if (response.data.uniqueEmails !== undefined) {
+                setUniqueEmails(response.data.uniqueEmails);
+                setHasEmailColumn(true);
+              }
             } else if (response.rows) {
               // Direct rows property
               tableRows = response.rows;
@@ -928,6 +936,7 @@ export default function TableDetailPage() {
       setColumns([]);
     } finally {
       setLoading(false);
+      setTableLoading(false);
     }
   };
 
@@ -1102,109 +1111,16 @@ export default function TableDetailPage() {
     return `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`
   }
 
-  // Fetch insights data from the backend API
-  const fetchInsightsData = async () => {
-    if (!tableName) {
-      return;
-    }
-
-    try {
-      setReportStats({}); // Clear previous stats
-      
-      let insightsResponse;
-      
-      // Use different approaches based on what we have
-      if (segmentId) {
-        // If we have a segment ID, use it to fetch insights
-        // console.log("Fetching insights using segment:", segmentId);
-        insightsResponse = await dataService.getTableInsightsWithSegment(tableName, segmentId);
-      } else if (customSql) {
-        // If we have custom SQL, use it
-        // console.log("Fetching insights using custom SQL");
-        insightsResponse = await dataService.getTableInsights(tableName, {
-          customSql
-        });
-      } else if (filterGroups && filterGroups.length > 0) {
-        // Format filters for the API
-        const formattedFilterGroups = filterGroups
-          .filter((group) => group.isEnabled !== false)
-          .map((group) => ({
-            logic_operator: group.condition === "NOT" ? "AND" : group.condition,
-            not: group.condition === "NOT",
-            filters: group.filters.map((filter) => ({
-              type: 'condition',
-              column: filter.column,
-              operator: mapOperatorToBackend(filter.operator),
-              value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
-                ? [filter.value, filter.value2] 
-                : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
-                  ? filter.value.split(',').map((v: string) => v.trim()) 
-                  : filter.value
-            }))
-          }));
-          
-        // console.log("Fetching insights using filter groups");
-        insightsResponse = await dataService.getTableInsights(tableName, {
-          filterGroups: formattedFilterGroups,
-          groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND']
-        });
-      } else {
-        // Fetch insights for the whole table without filters
-        // console.log("Fetching insights for entire table");
-        insightsResponse = await dataService.getTableInsights(tableName);
-      }
-      
-      // Process response
-      if (insightsResponse && insightsResponse.success && insightsResponse.data) {
-        // console.log("Insights data received:", insightsResponse.data);
-        setReportStats(insightsResponse.data);
-      } else {
-        console.error("Invalid insights response:", insightsResponse);
-        setReportStats({
-          totalRecords: tableData?.length || 0,
-          numericColumns: {},
-          categoricalColumns: {},
-          dateColumns: {},
-          summary: {
-            missingValues: {},
-            correlations: [],
-            mostCommonValues: [],
-            outliers: [],
-            distributions: {},
-            trends: {}
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching insights data:", error);
-      setReportStats({
-        totalRecords: tableData?.length || 0,
-        numericColumns: {},
-        categoricalColumns: {},
-        dateColumns: {},
-        summary: {
-          missingValues: {},
-          correlations: [],
-          mostCommonValues: [],
-          outliers: [],
-          distributions: {},
-          trends: {}
-        }
-      });
-    }
-  }
-
-  // Update report stats whenever tableData changes by fetching insights from backend
-  useEffect(() => {
-    if (tableData && tableData.length > 0) {
-      // Call fetchInsightsData instead of generating stats on the frontend
-      fetchInsightsData();
-    }
-  }, [tableData])
-
   const executeQuery = async () => {
     setExecuting(true);
+    setTableLoading(true);
     try {
+      // Reset pagination to first page when manually executing query
+      setPagination(prev => ({
+        ...prev,
+        page: 1
+      }));
+
       if (customSql) {
         // Handle custom SQL
         const validation = validateSql(customSql, tableName);
@@ -1215,6 +1131,7 @@ export default function TableDetailPage() {
             variant: "destructive",
           });
           setExecuting(false);
+          setTableLoading(false);
           return;
         }
         
@@ -1225,14 +1142,14 @@ export default function TableDetailPage() {
         const customResponse = await dataService.getTableData(tableName, { 
           customSql,
           filterGroups: [],
-          page: pagination.page,
+          page: 1, // Always use page 1 when executing a new query
           pageSize: pagination.pageSize
         });
         
         // Handle response
         let customTableRows: any[] = [];
         let paginationData = {
-          page: pagination.page,
+          page: 1,
           pageSize: pagination.pageSize,
           total: 0,
           totalPages: 1
@@ -1245,6 +1162,16 @@ export default function TableDetailPage() {
             // Extract pagination info
             if (customResponse.data.pagination) {
               paginationData = customResponse.data.pagination;
+            }
+            
+            // Get unique email count if available
+            if (customResponse.data.uniqueEmails !== undefined) {
+              setUniqueEmails(customResponse.data.uniqueEmails);
+              // If we got a uniqueEmails response (even if 0), we know there's an email column
+              setHasEmailColumn(true);
+            } else {
+              // If uniqueEmails is not in the response, there's likely no email column
+              setHasEmailColumn(false);
             }
           } else if (customResponse.rows) {
             customTableRows = customResponse.rows;
@@ -1261,10 +1188,7 @@ export default function TableDetailPage() {
           total: paginationData.total,
           totalPages: paginationData.totalPages
         }));
-        
-        // Fetch insights data from backend
-        fetchInsightsData();
-        
+                
         toast({
           title: "Query Executed",
           description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
@@ -1297,7 +1221,7 @@ export default function TableDetailPage() {
             })),
           // Add the between-group conditions as an array
           groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
-          page: pagination.page,
+          page: 1, // Always use page 1 when executing a new query
           pageSize: pagination.pageSize
         };
         
@@ -1309,7 +1233,7 @@ export default function TableDetailPage() {
         // Handle response
         let filterTableRows: any[] = [];
         let paginationData = {
-          page: pagination.page,
+          page: 1,
           pageSize: pagination.pageSize,
           total: 0,
           totalPages: 1
@@ -1322,6 +1246,16 @@ export default function TableDetailPage() {
             // Extract pagination info
             if (filterResponse.data.pagination) {
               paginationData = filterResponse.data.pagination;
+            }
+            
+            // Get unique email count if available
+            if (filterResponse.data.uniqueEmails !== undefined) {
+              setUniqueEmails(filterResponse.data.uniqueEmails);
+              // If we got a uniqueEmails response (even if 0), we know there's an email column
+              setHasEmailColumn(true);
+            } else {
+              // If uniqueEmails is not in the response, there's likely no email column
+              setHasEmailColumn(false);
             }
           } else if (filterResponse.rows) {
             filterTableRows = filterResponse.rows;
@@ -1338,10 +1272,7 @@ export default function TableDetailPage() {
           total: paginationData.total,
           totalPages: paginationData.totalPages
         }));
-        
-        // Fetch insights data from backend
-        fetchInsightsData();
-        
+           
         toast({
           title: "Query Executed",
           description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
@@ -1359,6 +1290,7 @@ export default function TableDetailPage() {
       });
     } finally {
       setExecuting(false);
+      setTableLoading(false);
     }
   };
 
@@ -1586,7 +1518,7 @@ export default function TableDetailPage() {
         is_template: false,
         is_saved_table: true,
         filter_groups: apiFilterGroups,
-        status: "active"
+        status: segmentData.status || "active" // Use the stored status instead of hardcoding "active"
       };
 
       let result;
@@ -1649,479 +1581,6 @@ export default function TableDetailPage() {
 
   const enabledFilterCount = filterGroups.filter((g) => g.isEnabled !== false).length
   const totalFilterCount = filterGroups.reduce((sum, group) => sum + group.filters.length, 0)
-
-  // Render the report overview component
-  const renderReportOverview = () => {
-    if (!reportStats.totalRecords) {
-      return (
-        <div className="text-center py-4 text-muted-foreground text-sm">
-          No data available for report overview.
-        </div>
-      )
-    }
-
-    return (
-      <div className="space-y-8">
-        {/* Overall Data Summary */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium flex items-center">
-            <Database className="h-5 w-5 mr-2 text-blue-500" />
-            Overall Data Summary
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-blue-500/10 rounded-md p-4 border border-blue-500/20">
-              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Records</div>
-              <div className="text-2xl font-semibold">{reportStats.totalRecords}</div>
-            </div>
-            {Object.keys(reportStats.numericColumns).length > 0 && (
-              <div className="bg-purple-500/10 rounded-md p-4 border border-purple-500/20">
-                <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">Numeric Columns</div>
-                <div className="text-2xl font-semibold">{Object.keys(reportStats.numericColumns).length}</div>
-              </div>
-            )}
-            {Object.keys(reportStats.categoricalColumns).length > 0 && (
-              <div className="bg-orange-500/10 rounded-md p-4 border border-orange-500/20">
-                <div className="text-sm text-orange-600 dark:text-orange-400 mb-1">Categorical Columns</div>
-                <div className="text-2xl font-semibold">{Object.keys(reportStats.categoricalColumns).length}</div>
-              </div>
-            )}
-            {Object.keys(reportStats.dateColumns).length > 0 && (
-              <div className="bg-green-500/10 rounded-md p-4 border border-green-500/20">
-                <div className="text-sm text-green-600 dark:text-green-400 mb-1">Date Columns</div>
-                <div className="text-2xl font-semibold">{Object.keys(reportStats.dateColumns).length}</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Key Insights */}
-        {(reportStats.summary.correlations.length > 0 || 
-          reportStats.summary.outliers.length > 0 || 
-          Object.keys(reportStats.summary.trends).length > 0) && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium flex items-center">
-              <Zap className="h-5 w-5 mr-2 text-amber-500" />
-              Key Insights
-            </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Correlations */}
-              {reportStats.summary.correlations.length > 0 && (
-                <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 rounded-md p-4 border border-amber-500/20">
-                  <h4 className="text-base font-medium mb-3 flex items-center">
-                    <ArrowLeft className="h-4 w-4 mr-2 text-amber-500 rotate-45" />
-                    Column Correlations
-                  </h4>
-                  <div className="space-y-3">
-                    {reportStats.summary.correlations.slice(0, 3).map((corr: any, idx: number) => (
-                      <div key={idx} className="flex items-center">
-                        <div className="flex-1 flex items-center">
-                          <div className="w-2 h-2 rounded-full mr-2" 
-                            style={{ 
-                              backgroundColor: corr.direction === 'positive' 
-                                ? 'rgb(34, 197, 94)' // green-500
-                                : 'rgb(239, 68, 68)' // red-500
-                            }}
-                          />
-                          <div className="truncate mr-1" title={corr.columns[0]}>
-                            {corr.columns[0]}
-                          </div>
-                          <span className="mx-1 text-muted-foreground">and</span>
-                          <div className="truncate" title={corr.columns[1]}>
-                            {corr.columns[1]}
-                          </div>
-                        </div>
-                        <Badge className={`ml-2 ${
-                          corr.strength === 'strong' 
-                            ? 'bg-amber-500 hover:bg-amber-600' 
-                            : corr.strength === 'moderate'
-                              ? 'bg-amber-400 hover:bg-amber-500'
-                              : 'bg-amber-300 hover:bg-amber-400'
-                        }`}>
-                          {corr.correlation > 0 ? '+' : ''}{corr.correlation}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                  {reportStats.summary.correlations.length > 3 && (
-                    <div className="text-sm text-muted-foreground mt-2 text-center">
-                      +{reportStats.summary.correlations.length - 3} more correlations
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Outliers */}
-              {reportStats.summary.outliers.length > 0 && (
-                <div className="bg-gradient-to-br from-red-500/5 to-red-500/10 rounded-md p-4 border border-red-500/20">
-                  <h4 className="text-base font-medium mb-3 flex items-center">
-                    <span className="relative flex h-5 w-5 mr-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-20"></span>
-                      <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 items-center justify-center text-white text-xs">!</span>
-                    </span>
-                    Detected Outliers
-                  </h4>
-                  <div className="space-y-3">
-                    {reportStats.summary.outliers.slice(0, 3).map((outlier: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between">
-                        <div className="truncate" title={outlier.column}>
-                          {outlier.column}
-                        </div>
-                        <div className="flex items-center">
-                          <Badge variant="outline" className="mr-2 border-red-500/20 text-red-600 dark:text-red-400">
-                            {outlier.count} values
-                          </Badge>
-                          <Badge className="bg-red-500 hover:bg-red-600">
-                            {outlier.percentage}%
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {reportStats.summary.outliers.length > 3 && (
-                    <div className="text-sm text-muted-foreground mt-2 text-center">
-                      +{reportStats.summary.outliers.length - 3} more columns with outliers
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Trends */}
-              {Object.keys(reportStats.summary.trends).length > 0 && (
-                <div className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 rounded-md p-4 border border-blue-500/20">
-                  <h4 className="text-base font-medium mb-3 flex items-center">
-                    <ArrowLeft className={`h-4 w-4 mr-2 text-blue-500 ${
-                      reportStats.summary?.trends && 
-                      Object.values(reportStats.summary.trends || {}).length > 0 &&
-                      (Object.values(reportStats.summary.trends || {})[0] as any)?.trend === 'increasing' 
-                        ? 'rotate-45' 
-                        : 'rotate-135'
-                    }`} />
-                    Detected Trends
-                  </h4>
-                  <div className="space-y-3">
-                    {Object.entries(reportStats.summary.trends).slice(0, 3).map(([colName, trend]: [string, any], idx: number) => (
-                      <div key={idx} className="flex items-center justify-between">
-                        <div className="truncate" title={colName}>
-                          {colName}
-                        </div>
-                        <Badge className={`${
-                          trend.trend === 'increasing' 
-                            ? 'bg-green-500 hover:bg-green-600' 
-                            : 'bg-red-500 hover:bg-red-600'
-                        }`}>
-                          {trend.trend} trend
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Missing Values */}
-              {Object.entries(reportStats.summary.missingValues)
-                .filter(([_, stats]: [string, any]) => stats.percentage > 0)
-                .length > 0 && (
-                <div className="bg-gradient-to-br from-gray-500/5 to-gray-500/10 rounded-md p-4 border border-gray-500/20">
-                  <h4 className="text-base font-medium mb-3 flex items-center">
-                    <div className="h-4 w-4 mr-2 border border-gray-500 rounded-sm" />
-                    Missing Values
-                  </h4>
-                  <div className="space-y-3">
-                    {Object.entries(reportStats.summary.missingValues)
-                      .filter(([_, stats]: [string, any]) => stats.percentage > 0)
-                      .sort((a: any, b: any) => b[1].percentage - a[1].percentage)
-                      .slice(0, 3)
-                      .map(([colName, stats]: [string, any], idx: number) => (
-                        <div key={idx} className="flex items-center justify-between">
-                          <div className="truncate" title={colName}>
-                            {colName}
-                          </div>
-                          <div className="flex items-center">
-                            <Badge variant="outline" className="mr-2 border-gray-500/20">
-                              {stats.count} values
-                            </Badge>
-                            <Badge className="bg-gray-500 hover:bg-gray-600">
-                              {stats.percentage}%
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Common Values */}
-        {reportStats.summary.mostCommonValues.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium flex items-center">
-              <PieChart className="h-5 w-5 mr-2 text-orange-500" />
-              Most Common Values
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reportStats.summary.mostCommonValues.slice(0, 6).map((item: any, idx: number) => (
-                <div key={idx} className="bg-gradient-to-br from-orange-500/5 to-orange-500/10 rounded-md p-4 border border-orange-500/20">
-                  <h4 className="text-base font-medium mb-2 truncate" title={item.column}>
-                    {item.column}
-                  </h4>
-                  <div className="space-y-2">
-                    {item.values.map((value: any, vidx: number) => (
-                      <div key={vidx} className="flex items-center">
-                        <div className="w-28 truncate mr-2" title={value.value}>
-                          {value.value}
-                        </div>
-                        <div className="flex-grow bg-muted rounded-full h-2 mr-2">
-                          <div 
-                            className="bg-orange-500 h-2 rounded-full" 
-                            style={{ width: `${value.percentage}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-sm w-12 text-right text-muted-foreground font-medium">
-                          {value.percentage}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Column Details Section */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium flex items-center">
-            <Layers className="h-5 w-5 mr-2 text-primary" />
-            Column Details
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Numeric Columns */}
-            {Object.entries(reportStats.numericColumns).map(([colName, stats]: [string, any]) => (
-              <div key={colName} className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-md p-4 border border-primary/20 hover:border-primary/30 transition-colors">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                    <BarChart className="h-4 w-4 mr-2 text-primary" />
-                    {colName}
-                  </h4>
-                </div>
-                
-                {/* Histogram miniature */}
-                {stats.distribution && stats.distribution.length > 0 && (
-                  <div className="mb-3 h-12 flex items-end">
-                    {stats.distribution.map((bucket: any, idx: number) => {
-                      const maxCount = Math.max(...stats.distribution.map((b: any) => b.count));
-                      const heightPercentage = bucket.count > 0 
-                        ? Math.max(15, (bucket.count / maxCount) * 100) 
-                        : 0;
-                      return (
-                        <div 
-                          key={idx} 
-                          className="flex-1 bg-primary/30 rounded-sm mx-0.5"
-                          style={{ height: `${heightPercentage}%` }}
-                          title={`${bucket.range[0]} - ${bucket.range[1]}: ${bucket.count} values`}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-2 gap-x-4 text-sm">
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Avg:</span>
-                    <span className="font-medium">{stats.avg}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Median:</span>
-                    <span className="font-medium">{stats.median}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Min:</span>
-                    <span className="font-medium">{stats.min}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Max:</span>
-                    <span className="font-medium">{stats.max}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">StdDev:</span>
-                    <span className="font-medium">{stats.stdDev}</span>
-                  </div>
-                  {stats.outlierCount > 0 && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-muted-foreground">Outliers:</span>
-                      <span className="font-medium text-red-500">{stats.outlierPercentage}%</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Categorical Columns */}
-            {Object.entries(reportStats.categoricalColumns).map(([colName, stats]: [string, any]) => (
-              <div key={colName} className="bg-gradient-to-br from-orange-500/5 to-orange-600/10 rounded-md p-4 border border-orange-500/20 hover:border-orange-500/30 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                    <PieChart className="h-4 w-4 mr-2 text-orange-500" />
-                    {colName}
-                  </h4>
-                  <Badge variant="outline" className="border-orange-500/20 text-orange-600 dark:text-orange-400">
-                    {stats.uniqueValues} unique
-                  </Badge>
-                </div>
-                
-                {/* Distribution bar */}
-                {stats.dominance > 0 && (
-                  <div className="mb-3">
-                    <div className="flex items-center h-6 mb-1">
-                      <div className="flex-grow bg-muted rounded-full h-2.5">
-                        <div 
-                          className="bg-orange-500 h-2.5 rounded-full" 
-                          style={{ width: `${stats.dominance}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-xs ml-2 text-muted-foreground">
-                        {stats.dominance}% dominant
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {stats.topValues.length > 0 ? (
-                  <div className="space-y-2">
-                    {stats.topValues.slice(0, 3).map((tv: any, idx: number) => (
-                      <div key={idx} className="flex items-center text-sm">
-                        <div className="w-20 truncate mr-2" title={tv.value}>
-                          {tv.value}
-                        </div>
-                        <div className="flex-grow bg-muted rounded-full h-2 mr-2">
-                          <div 
-                            className="bg-orange-500/80 h-2 rounded-full" 
-                            style={{ width: `${tv.percentage}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-sm w-12 text-right text-muted-foreground font-medium">
-                          {tv.percentage}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground text-center py-2">No frequent values</div>
-                )}
-                
-                {/* Additional stats */}
-                <div className="mt-3 grid grid-cols-2 gap-x-4 text-sm">
-                  {stats.nullCount > 0 && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-muted-foreground">Null:</span>
-                      <span className="font-medium">
-                        {((stats.nullCount / reportStats.totalRecords) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                  {stats.emptyCount > 0 && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-muted-foreground">Empty:</span>
-                      <span className="font-medium">
-                        {((stats.emptyCount / reportStats.totalRecords) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Diversity:</span>
-                    <span className="font-medium">{stats.diversity}%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Date Columns */}
-            {Object.entries(reportStats.dateColumns).map(([colName, stats]: [string, any]) => (
-              <div key={colName} className="bg-gradient-to-br from-blue-500/5 to-blue-600/10 rounded-md p-4 border border-blue-500/20 hover:border-blue-500/30 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-base font-medium flex items-center truncate" title={colName}>
-                    <CalendarIcon className="h-4 w-4 mr-2 text-blue-500" />
-                    {colName}
-                  </h4>
-                  <Badge variant="outline" className="border-blue-500/20 text-blue-500">
-                    {stats.dateRange} days
-                  </Badge>
-                </div>
-                
-                {/* Period distribution */}
-                {stats.trend !== "stable" && (
-                  <div className="mb-3 flex items-center">
-                    <Badge className={`mr-2 ${
-                      stats.trend === "increasing" 
-                        ? "bg-green-500 hover:bg-green-600" 
-                        : "bg-red-500 hover:bg-red-600"
-                    }`}>
-                      {stats.trend} trend
-                    </Badge>
-                    {stats.weeklyPattern && (
-                      <Badge variant="outline" className="mr-2 border-blue-500/20 text-blue-500">
-                        weekly pattern
-                      </Badge>
-                    )}
-                    {stats.yearlyPattern && (
-                      <Badge variant="outline" className="border-blue-500/20 text-blue-500">
-                        seasonal
-                      </Badge>
-                    )}
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">First:</span>
-                    <span className="font-medium truncate" title={stats.minDate}>{stats.minDate}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-muted-foreground">Last:</span>
-                    <span className="font-medium truncate" title={stats.maxDate}>{stats.maxDate}</span>
-                  </div>
-                </div>
-                
-                {/* Top distribution - show either months or days depending on which has more variation */}
-                {stats.monthDistribution && stats.monthDistribution.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      {stats.monthDistribution.length > 1 ? "Monthly distribution:" : "Month:"}
-                    </div>
-                    <div className="flex text-xs">
-                      {stats.monthDistribution.slice(0, 6).map(([month, count]: [string, number], idx: number) => {
-                        const maxCount = Math.max(
-                          ...stats.monthDistribution.map(([_, c]: [string, number]) => c)
-                        );
-                        const percentage = Math.max(20, (count / maxCount) * 100);
-                        return (
-                          <div 
-                            key={idx} 
-                            className="flex-1 flex flex-col items-center"
-                            title={`${month}: ${count} records`}
-                          >
-                            <div 
-                              className="w-full bg-blue-500/30 rounded-sm"
-                              style={{ height: `${percentage}%`, maxHeight: '24px' }}
-                            />
-                            <div className="mt-1 truncate w-full text-center" style={{ fontSize: '0.65rem' }}>
-                              {month.substring(0, 3)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Render pagination controls
   const renderPagination = () => {
@@ -2541,33 +2000,6 @@ export default function TableDetailPage() {
                 />
               )}
 
-              {/* Report Overview - Separate Card */}
-              {tableData && tableData.length > 0 && (
-                <Card className="border overflow-y-auto max-h-[calc(100vh-17rem)] custom-scrollbar border-secondary/20 bg-gradient-to-br from-secondary/5 to-secondary/10">
-                  <div className="px-4 py-3 flex items-center justify-between border-b border-secondary/20">
-                    <h3 className="text-base flex items-center font-medium">
-                      <div className="h-6 w-6 rounded-md bg-secondary/10 flex items-center justify-center mr-2">
-                        <BarChart className="h-4 w-4 text-secondary" />
-                      </div>
-                      Data Insights
-                    </h3>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 px-4 text-sm border-primary/20 hover:border-primary/40 hover:bg-primary/5"
-                      onClick={() => toggleView(!showReportOverview)}
-                    >
-                      {showReportOverview ? "Show Table" : "Show Insights"}
-                    </Button>
-                  </div>
-                  {showReportOverview && (
-                    <div className="p-5">
-                      {renderReportOverview()}
-                    </div>
-                  )}
-                </Card>
-              )}
-
               {/* Data Preview */}
               <Card className="border border-green-500/20 bg-gradient-to-br from-green-500/5 to-green-600/10">
                 <CardHeader>
@@ -2584,14 +2016,20 @@ export default function TableDetailPage() {
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.total}</span>
                           <span className="text-xs text-muted-foreground">Overall Rows</span>
                         </div>
-                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                        {/* <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
                           <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.page || 0}</span>
                           <span className="text-xs text-muted-foreground">current page</span>
-                        </div>
-                        {/* <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{columns?.length || 0}</span>
-                          <span className="text-xs text-muted-foreground">columns</span>
                         </div> */}
+                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{columns?.length || 0}</span>
+                          <span className="text-xs text-muted-foreground">Columns</span>
+                        </div>
+                        {hasEmailColumn && (
+                          <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
+                            <span className="text-lg font-semibold text-green-700 dark:text-green-300">{uniqueEmails !== null ? uniqueEmails : 0}</span>
+                            <span className="text-xs text-muted-foreground">Unique emails</span>
+                          </div>
+                        )}
                         {enabledFilterCount > 0 && (
                           <div className="flex flex-col items-center px-4 py-2 bg-primary/10 rounded-md border border-primary/20">
                             <span className="text-lg font-semibold text-primary">{enabledFilterCount}</span>
@@ -2617,29 +2055,26 @@ export default function TableDetailPage() {
                             <Download className="h-4 w-4 text-green-500" />
                             Export Page
                           </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => toggleView(!showReportOverview)}
-                            className="flex items-center gap-1 bg-primary/90 hover:bg-primary text-white dark:text-white"
-                          >
-                            <BarChart className="h-4 w-4" />
-                            {showReportOverview ? "Show Table" : "Show Insights"}
-                          </Button>
                         </div>
                       )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0 sm:p-0">
-                  {showDataTable && (
                     <div className="space-y-4">
-                      <div className="rounded-md border border-green-500/20 overflow-hidden">
+                      <div className="rounded-md border border-green-500/20 overflow-hidden relative">
+                        {(tableLoading || executing) && (
+                          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="h-10 w-10 rounded-full border-4 border-green-500/30 border-t-green-500 animate-spin"></div>
+                              <p className="text-sm font-medium text-green-700 dark:text-green-300">Loading data...</p>
+                            </div>
+                          </div>
+                        )}
                         <DataTable data={tableData || []} columns={columns || []} />
                       </div>
                       {renderPagination()}
                     </div>
-                  )}
                 </CardContent>
               </Card>
             </div>

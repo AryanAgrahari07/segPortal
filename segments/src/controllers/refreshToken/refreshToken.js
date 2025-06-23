@@ -19,8 +19,7 @@ exports.refreshToken = async (req, res) => {
           message: "Invalid refresh token",
         });
       }
-
-    
+  
     // Generate new tokens
     const accessToken = authService.generateAccessToken({
       user_id: session.user_id,
@@ -39,16 +38,16 @@ exports.refreshToken = async (req, res) => {
         sameSite: 'Lax',
         domain: 'localhost',
         path: '/',
-        maxAge: 20 * 60 * 1000, // 20 minutes
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
     } else {
       res.cookie('refreshtoken', newRefreshToken, {
         httpOnly: false,
         secure: true,
-        sameSite: process.env.SAME_SITE,
+        sameSite: process.env.SAME_SITE || "None",
         domain: process.env.COOKIE_DOMAIN,
         path: '/',
-        maxAge: 20 * 60 * 1000, // 20 minutes
+        maxAge: 7 *24 * 60 * 60 * 1000, // 7 days
       });
     }
 

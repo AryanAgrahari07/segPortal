@@ -128,7 +128,6 @@ exports.sendOTP = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            hashedOTP: hashedOTP,
             message: 'OTP generated and sent successfully. Valid for 60 seconds.',
         });
     } catch (error) {

@@ -150,82 +150,6 @@ class DataService {
     })
   }
 
-  /**
-   * Get insights and statistics for table data
-   * This function fetches analytical insights about the table data
-   * It works with filters, custom SQL, and respects all the filtering options from getTableData
-   */
-  async getTableInsights(tableName: string, params?: {
-    filterGroups?: any[],
-    groupConditions?: string[],
-    customSql?: string
-  }) {
-    return this.makeRequest(`/table-insights/${tableName}`, {
-      method: "POST",
-      body: JSON.stringify(params || {}),
-    })
-  }
-
-  /**
-   * Get insights and statistics for table data using a saved segment
-   * This function fetches analytical insights about the table data based on a segment's filters or SQL
-   */
-  async getTableInsightsWithSegment(tableName: string, segmentId: string) {
-    try {
-      // First get the segment to extract its filters
-      const segmentResponse = await this.getSegmentById(segmentId, ["filter_groups", "filters"]);
-      
-      if (!segmentResponse || !segmentResponse.data) {
-        throw new Error("Failed to load segment data");
-      }
-      
-      const segment = segmentResponse.data;
-      
-      // Check if we have custom SQL
-      if (segment.custom_sql) {
-        // Use custom SQL directly
-        return this.makeRequest(`/table-insights/${tableName}`, {
-          method: "POST",
-          body: JSON.stringify({
-            customSql: segment.custom_sql,
-            tableName: tableName
-          }),
-        });
-      } 
-      
-      // Convert filter groups to the expected format
-      const filterGroups = segment.filter_groups?.map(group => ({
-        logic_operator: group.group_condition,
-        filters: group.filters?.map(filter => ({
-          type: 'condition',
-          column: filter.column_name,
-          operator: filter.filter_operator,
-          value: filter.filter_operator === 'between' ? 
-            [filter.filter_value, filter.filter_value_2] : 
-            filter.filter_value
-        }))
-      }));
-      
-      // Extract group conditions if available
-      const groupConditions = segment.segment_config?.groupConditions || 
-                             segment.groupConditions || 
-                             ['AND'];
-                             
-      // Make the request with the extracted filters
-      return this.makeRequest(`/table-insights/${tableName}`, {
-        method: "POST",
-        body: JSON.stringify({
-          filterGroups,
-          groupConditions,
-          tableName
-        }),
-      });
-      
-    } catch (error) {
-      console.error("Error getting insights with segment:", error);
-      throw error;
-    }
-  }
 
   // Helper function to convert data to CSV format
   convertToCSV(data: any[], columns: string[]): string {
@@ -420,7 +344,7 @@ class DataService {
 
     // Set default status if not provided
     if (!segmentData.status) {
-      segmentData.status = "pending";
+      segmentData.status = "active";
     }
 
     // Format timing fields if present in segment_config
@@ -496,23 +420,39 @@ class DataService {
   }
 
   async deleteSegment(segmentId: string) {
-    return this.makeRequest(`/delete-segment/${segmentId}`, {
-      method: "DELETE",
+    try {
+      const response = await this.makeRequest(`/delete-segment/${segmentId}`, {
+        method: "DELETE",
+      })
+      return response
+    } catch (error: any) {
+      // Check if the error is a permission error (403)
+      if (error.message && error.message.includes("Permission denied")) {
+        throw new Error("You don't have permission to delete this segment. Only the creator or an admin can delete segments.")
+      }
+      throw error
+    }
+  }
+
+  async toggleSegmentStatus(segmentId: string, status: 'active' | 'disabled') {
+    return this.makeRequest(`/toggle-segment-status/${segmentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status })
     })
   }
 
-  async executeSegment(segmentId: string, options: { save_results: boolean }) {
-    try {
-      // console.log("Executing segment:", segmentId, options);
-      return this.makeRequest(`/segments/${segmentId}/execute`, {
-        method: "POST",
-        body: JSON.stringify(options),
-      });
-    } catch (error) {
-      console.error("Error executing segment:", error);
-      throw error;
-    }
-  }
+  // async executeSegment(segmentId: string, options: { save_results: boolean }) {
+  //   try {
+  //     // console.log("Executing segment:", segmentId, options);
+  //     return this.makeRequest(`/segments/${segmentId}/execute`, {
+  //       method: "POST",
+  //       body: JSON.stringify(options),
+  //     });
+  //   } catch (error) {
+  //     console.error("Error executing segment:", error);
+  //     throw error;
+  //   }
+  // }
 
   async updateLastExecuted(segmentId: string) {
     return this.makeRequest(`/segments/${segmentId}/executed`, {

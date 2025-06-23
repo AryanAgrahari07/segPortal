@@ -504,11 +504,56 @@ exports.updateSegment = async (req, res) => {
 exports.deleteSegment = async (req, res) => {
   try {
     const { segmentId } = req.params;
-
+    const userId = req.user.email; // Get the current user's email from the auth middleware
+     
     if (!segmentId) {
       return res.status(400).json({
         success: false,
         message: 'Segment ID is required'
+      });
+    }
+
+    // Get the user's role from the database
+    const userRoleQuery = `
+      SELECT role FROM users
+      WHERE email = ${escapeSQLString(userId)}
+    `;
+    
+    const userResult = await executeQuery(userRoleQuery);
+    
+    if (!userResult || userResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    const userRole = userResult[0].role;
+    console.log("userRole is", userRole);
+
+    // First, check if the segment exists and who created it
+    const segmentQuery = `
+      SELECT created_by FROM segments
+      WHERE segment_id = ${escapeSQLString(segmentId)}
+      AND is_active = TRUE
+    `;
+    
+    const segmentResult = await executeQuery(segmentQuery);
+    
+    if (!segmentResult || segmentResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Segment not found'
+      });
+    }
+    
+    const segment = segmentResult[0];
+    
+    // Check if the user is the creator of the segment or has an admin role
+    if (segment.created_by !== userId && userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Permission denied: Only the creator or an admin can delete this segment'
       });
     }
 
@@ -530,6 +575,94 @@ exports.deleteSegment = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to deactivate segment',
+      error: error.message
+    });
+  }
+};
+
+exports.toggleSegmentStatus = async (req, res) => {
+  try {
+    const { segmentId } = req.params;
+    const { status } = req.body; // Should be 'active' or 'disabled'
+    const userId = req.user.email; // Get the current user's email from the auth middleware
+    
+    if (!segmentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Segment ID is required'
+      });
+    }
+    
+    if (!status || (status !== 'active' && status !== 'disabled')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid status is required (active or disabled)'
+      });
+    }
+
+    // Get the user's role from the database
+    const userRoleQuery = `
+      SELECT role FROM users
+      WHERE email = ${escapeSQLString(userId)}
+    `;
+    
+    const userResult = await executeQuery(userRoleQuery);
+    
+    if (!userResult || userResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    const userRole = userResult[0].role;
+
+    // Check if the segment exists and who created it
+    const segmentQuery = `
+      SELECT created_by, status FROM segments
+      WHERE segment_id = ${escapeSQLString(segmentId)}
+      AND is_active = TRUE
+    `;
+    
+    const segmentResult = await executeQuery(segmentQuery);
+    
+    if (!segmentResult || segmentResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Segment not found'
+      });
+    }
+    
+    const segment = segmentResult[0];
+    
+    // Check if the user is the creator of the segment or has an admin role
+    if (segment.created_by !== userId && userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Permission denied: Only the creator or an admin can change the status of this segment'
+      });
+    }
+
+    // Update the segment status
+    const updateStatusQuery = `
+      UPDATE segments
+      SET status = ${escapeSQLString(status)},
+          updated_at = CURRENT_TIMESTAMP()
+      WHERE segment_id = ${escapeSQLString(segmentId)}
+    `;
+    
+    await executeQuery(updateStatusQuery);
+
+    return res.status(200).json({
+      success: true,
+      message: `Segment status updated to ${status}`,
+      data: { status }
+    });
+  } catch (error) {
+    console.error('Error updating segment status:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update segment status',
       error: error.message
     });
   }

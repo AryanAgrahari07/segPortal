@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { dataService } from "@/services/data-service"
-import { Loader2, ArrowLeft, Filter, Play, Edit, Trash2 } from "lucide-react"
+import { Loader2, ArrowLeft, Filter, Play, Edit, Trash2, Power } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +21,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { SegmentData } from "@/services/data-service"
+import { useAuth } from "@/contexts/auth-context"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 export default function SegmentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
   const segmentId = params?.segmentId as string
 
   const [segment, setSegment] = useState<SegmentData | null>(null)
@@ -33,6 +37,10 @@ export default function SegmentDetailPage() {
   const [executing, setExecuting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
+
+  // Check if the current user can manage this segment (creator or admin)
+  const canManageSegment = user && segment && (user.email === segment.created_by || user.role === "admin")
 
   useEffect(() => {
     loadSegmentData()
@@ -99,6 +107,36 @@ export default function SegmentDetailPage() {
     }
   }
 
+  const toggleSegmentStatus = async () => {
+    if (!segment) return
+    
+    try {
+      setIsToggling(true)
+      const newStatus = segment.status === 'active' ? 'disabled' : 'active'
+      
+      await dataService.toggleSegmentStatus(segmentId, newStatus)
+      
+      // Update local state
+      setSegment({
+        ...segment,
+        status: newStatus
+      })
+      
+      toast({
+        title: "Success",
+        description: `Segment ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to ${segment.status === 'active' ? 'deactivate' : 'activate'} segment`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsToggling(false)
+    }
+  }
+
   const editSegment = () => {
     router.push(`/table/${segment?.segment_config?.target_table}?segment=${segmentId}`)
   }
@@ -157,6 +195,19 @@ export default function SegmentDetailPage() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
+            {canManageSegment && (
+              <div className="flex items-center space-x-2 mr-4">
+                <Switch
+                  id="segment-status"
+                  checked={segment.status === 'active'}
+                  onCheckedChange={toggleSegmentStatus}
+                  disabled={isToggling}
+                />
+                <Label htmlFor="segment-status">
+                  {segment.status === 'active' ? 'Active' : 'Disabled'}
+                </Label>
+              </div>
+            )}
             <Button variant="outline" onClick={editSegment}>
               <Edit className="h-4 w-4 mr-2" />
               Edit Segment
@@ -164,10 +215,12 @@ export default function SegmentDetailPage() {
             {/* <Button onClick={editSegment} >
                <Play className="h-4 w-4 mr-2" /> Execute Segment
             </Button> */}
-            <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
+            {canManageSegment && (
+              <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 
@@ -184,7 +237,12 @@ export default function SegmentDetailPage() {
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
-                <Badge variant={segment.status === "active" ? "default" : "secondary"}>{segment.status}</Badge>
+                <Badge 
+                  variant={segment.status === "active" ? "default" : "secondary"}
+                  className={segment.status === "active" ? "bg-green-500" : "bg-gray-500"}
+                >
+                  {segment.status}
+                </Badge>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Created By</h3>
@@ -194,12 +252,6 @@ export default function SegmentDetailPage() {
                 <h3 className="text-sm font-medium text-muted-foreground">Created At</h3>
                 <p>{new Date(segment.created_at).toLocaleString()}</p>
               </div>
-              {/* {segment.last_executed && (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Last Executed</h3>
-                  <p>{new Date(segment.last_executed).toLocaleString()}</p>
-                </div>
-              )} */}
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Filter Summary</h3>
                 <p>

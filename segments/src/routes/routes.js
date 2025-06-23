@@ -6,10 +6,10 @@ const { sanitizeInput } = require("../middleware/security.js");
 const { verifyToken } = require("../middleware/auth.js");
 const { refreshToken } = require("../controllers/refreshToken/refreshToken.js");
 const { getAllTables } = require("../controllers/allTables/tables.js");
-const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted } = require("../controllers/segments/segment.js");
+const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted, toggleSegmentStatus } = require("../controllers/segments/segment.js");
 const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole } = require("../controllers/addUser/adduser.js");
 const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
-const { generateTableInsights } = require('../controllers/tableData/insights.js');
+
 
 const filterGroupsController = require("../controllers/segments/filter_groups");
 const filtersController = require("../controllers/segments/filters");
@@ -35,6 +35,7 @@ router.post("/create-segment", verifyToken, createSegment);                 ///
 router.put("/update-segment/:segmentId", verifyToken, updateSegment);
 router.delete("/delete-segment/:segmentId", verifyToken, deleteSegment);
 router.put('/:segmentId/executed', verifyToken, updateLastExecuted);
+router.put("/toggle-segment-status/:segmentId", verifyToken, toggleSegmentStatus);
 
 // Filter Group routes
 router.get('/:segmentId/filter-groups', verifyToken, filterGroupsController.getFilterGroupsBySegmentId);
@@ -67,7 +68,6 @@ router.get("/check", verifyToken, sanitizeInput, (req, res) => {
 // Table data routes
 router.get('/table/:tableName/metadata', verifyToken, getTableMetadata);
 router.post('/table/:tableName/data', verifyToken, getTableData);
-router.post('/table-insights/:tableName', verifyToken, generateTableInsights);
 router.get('/table/:tableName/segment/:segmentId', verifyToken, getTableDataWithSegment);
 
 module.exports = router;

@@ -135,6 +135,44 @@ exports.getTableData = async (req, res) => {
     // Get filter data from request body
     const { filterGroups, groupConditions, customSql } = req.body;
     
+    // First, check if the table has an email column
+    let emailColumnExists = false;
+    let emailColumnName = '';
+    
+    try {
+      // Handle multi-part table names (catalog.schema.table)
+      const parts = tableName.split('.');
+      let quotedTableName;
+      
+      if (parts.length === 3) {
+        // Format: catalog.schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\`.\`${parts[2]}\``;
+      } else if (parts.length === 2) {
+        // Format: schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\``;
+      } else {
+        // Format: just table
+        quotedTableName = `\`${tableName}\``;
+      }
+      
+      // Check for columns that might contain email (looking for common email column names)
+      const columnCheckQuery = `DESCRIBE TABLE ${quotedTableName}`;
+      const columns = await executeQuery(columnCheckQuery);
+      
+      // Look for column names that likely contain email data
+      const emailColumnPattern = /email|e_mail|mail|email_address/i;
+      const emailColumn = columns.find(col => emailColumnPattern.test(col.col_name || col.name || ''));
+      
+      if (emailColumn) {
+        emailColumnExists = true;
+        emailColumnName = emailColumn.col_name || emailColumn.name;
+        console.log(`Found email column: ${emailColumnName}`);
+      }
+    } catch (error) {
+      console.error('Error checking for email column:', error);
+      // Continue with the request even if we can't determine if there's an email column
+    }
+    
     // Check if custom SQL is provided
     if (customSql) {
       try {
@@ -145,6 +183,19 @@ exports.getTableData = async (req, res) => {
         const countSql = `SELECT COUNT(*) AS total FROM (${customSql}) AS countQuery`;
         const countResult = await executeQuery(countSql);
         const total = countResult[0].total;
+        
+        // Count unique emails if email column exists
+        let uniqueEmailCount = 0;
+        if (emailColumnExists) {
+          const uniqueEmailSql = `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM (${customSql}) AS emailQuery`;
+          try {
+            const uniqueEmailResult = await executeQuery(uniqueEmailSql);
+            uniqueEmailCount = uniqueEmailResult[0].unique_emails;
+          } catch (emailError) {
+            console.error('Error counting unique emails in custom SQL:', emailError);
+            // Continue without unique email count
+          }
+        }
         
         // Apply pagination to the SQL
         const paginatedSql = `SELECT * FROM (${customSql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
@@ -162,7 +213,8 @@ exports.getTableData = async (req, res) => {
               page,
               pageSize,
               totalPages
-            }
+            },
+            uniqueEmails: emailColumnExists ? uniqueEmailCount : null
           }
         });
       } catch (error) {
@@ -178,6 +230,7 @@ exports.getTableData = async (req, res) => {
     // Build the base SQL query
     let countQuery = `SELECT COUNT(*) AS total FROM ${tableName}`;
     let dataQuery = `SELECT * FROM ${tableName}`;
+    let uniqueEmailQuery = emailColumnExists ? `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM ${tableName}` : null;
     
     // Apply filters if provided
     if (filterGroups && Array.isArray(filterGroups) && filterGroups.length > 0) {
@@ -223,6 +276,9 @@ exports.getTableData = async (req, res) => {
         
         countQuery += whereClause;
         dataQuery += whereClause;
+        if (uniqueEmailQuery) {
+          uniqueEmailQuery += whereClause;
+        }
       }
     }
     
@@ -237,10 +293,25 @@ exports.getTableData = async (req, res) => {
     
     console.log('Executing count query:', countQuery);
     console.log('Executing data query:', dataQuery);
+    if (uniqueEmailQuery) {
+      console.log('Executing unique email query:', uniqueEmailQuery);
+    }
     
     // Execute the count query first
     const countResult = await executeQuery(countQuery);
     const total = countResult[0].total;
+    
+    // Execute unique email count query if applicable
+    let uniqueEmailCount = null;
+    if (uniqueEmailQuery) {
+      try {
+        const uniqueEmailResult = await executeQuery(uniqueEmailQuery);
+        uniqueEmailCount = uniqueEmailResult[0].unique_emails;
+      } catch (emailError) {
+        console.error('Error counting unique emails:', emailError);
+        // Continue without unique email count
+      }
+    }
     
     // Execute the data query
     const data = await executeQuery(dataQuery);
@@ -257,7 +328,8 @@ exports.getTableData = async (req, res) => {
           page,
           pageSize,
           totalPages
-        }
+        },
+        uniqueEmails: uniqueEmailCount
       }
     });
   } catch (error) {

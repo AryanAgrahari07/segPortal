@@ -18,14 +18,14 @@ class AuthService {
         full_name: user.full_name,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '2m' } // 5m Short expiry for security
+      { expiresIn: '30m' } // 30m expiry balancing security and user experience
     );
   }
 
-  // Generate refresh token (long-lived)  - 20m
+  // Generate refresh token (long-lived)  - 12 hours
   generateRefreshToken() {
     return jwt.sign({ token_id: uuidv4() }, process.env.JWT_REFRESH_SECRET, {
-      expiresIn: '5m',
+      expiresIn: '12h',
     });
   }
 
@@ -33,7 +33,7 @@ class AuthService {
   async createSession(userId, refreshToken, deviceInfo, ipAddress) {
     const sessionId = uuidv4();
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 20 minutes from now
+    expiresAt.setHours(expiresAt.getHours() + 12); // 12 hours from now
 
     // Deactivate all existing sessions for this user
     const deactivateQuery = `
@@ -78,7 +78,7 @@ class AuthService {
       UPDATE user_sessions 
       SET refresh_token = ${escapeSQLString(newRefreshToken)},
           updated_at = CURRENT_TIMESTAMP(),
-          expires_at = CURRENT_TIMESTAMP() + INTERVAL 5 MINUTES
+          expires_at = CURRENT_TIMESTAMP() + INTERVAL 12 HOUR
       WHERE session_id = ${escapeSQLString(sessionId)}
     `;
 

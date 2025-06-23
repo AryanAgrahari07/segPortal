@@ -172,7 +172,7 @@ exports.verifyOTP = async (req, res) => {
             sameSite: 'Lax',
             domain: 'localhost',
             path: '/',
-            maxAge: 12 * 60 * 60 * 1000, // 12 hours
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           });
 
           res.cookie('refreshtoken', refreshToken, {
@@ -181,25 +181,25 @@ exports.verifyOTP = async (req, res) => {
             sameSite: 'Lax',
             domain: 'localhost',
             path: '/',
-            maxAge: 20 * 60 * 1000, // 20 minutes
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           });
         } else {
           res.cookie('sessionid', session.session_id, {
             httpOnly: false,
             secure: true,
-            sameSite: process.env.SAME_SITE,
+            sameSite: process.env.SAME_SITE || "None",
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
-            maxAge: 12 * 60 * 60 * 1000, // 12 hours
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           });
 
           res.cookie('refreshtoken', refreshToken, {
             httpOnly: false,
             secure: true,
-            sameSite: process.env.SAME_SITE,
+            sameSite: process.env.SAME_SITE || "None",
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
-            maxAge: 20 * 60 * 1000, // 20 minutes
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
           });
         }
 

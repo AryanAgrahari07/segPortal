@@ -10,13 +10,38 @@ const { connect } = require("./src/database/database.js");
 const DatabaseInitializer = require("./src/database/init");
 const { sanitizeInput } = require("./src/middleware/security.js");
 
-// if (!process.env.FRONTEND) {
-//     throw new Error("FRONTEND URL not defined in environment variables");
-//   }
+// console.log(process.env.DATABRICKS_HOST);
+// console.log(process.env.DATABRICKS_PATH);
+// console.log(process.env.DATABRICKS_TOKEN);
+// console.log(process.env.DB_NAME);
+
+// Check required environment variables
+const checkRequiredEnvVars = () => {
+  const requiredVars = [
+    "DATABRICKS_HOST",
+    "DATABRICKS_PATH",
+    "DATABRICKS_TOKEN",
+    "DB_NAME",
+  ];
+
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error(
+      `❌ Missing required environment variables: ${missingVars.join(", ")}`
+    );
+    console.error(
+      "Please set these variables in your .env file or environment"
+    );
+    return false;
+  }
+
+  return true;
+};
 
 app.use(
   cors({
-    origin: process.env.FRONTEND,
+    origin: process.env.FRONTEND_URL || "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -33,11 +58,34 @@ app.use("/", routesPath);
 
 const startServer = async () => {
   try {
-    // Connect to database
-    await connect();
+    // Check environment variables
+    if (!checkRequiredEnvVars()) {
+      process.exit(1);
+    }
 
-    // Initialize database tables
-    await DatabaseInitializer.initializeDatabase();
+    // Connect to database
+    try {
+      await connect();
+
+      // Initialize database tables
+      try {
+        await DatabaseInitializer.initializeDatabase();
+      } catch (dbInitError) {
+        // Log the error but continue starting the server
+        console.warn(
+          "⚠️ Database initialization warning:",
+          dbInitError.message
+        );
+        console.log(
+          "⚠️ Continuing server startup with limited database functionality"
+        );
+      }
+    } catch (dbError) {
+      console.error("❌ Database connection failed:", dbError.message);
+      console.log(
+        "⚠️ Starting server without database connection. Some features will not work."
+      );
+    }
 
     // Start listening
     app.listen(PORT, () => {

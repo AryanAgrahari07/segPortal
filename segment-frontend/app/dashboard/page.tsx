@@ -53,7 +53,6 @@ export default function DashboardPage() {
   const [segments, setSegments] = useState<Segment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [tablesPagination, setTablesPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
   const [segmentsPagination, setSegmentsPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>("")
@@ -159,13 +158,6 @@ export default function DashboardPage() {
     }
   }
 
-  // Filter tables by search term
-  const filteredTables = useMemo(() => {
-    return tables.filter((table) =>
-      table.tableName.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [tables, searchTerm])
-
   // Filter segments by search term
   const filteredSegments = useMemo(() => {
     return segments.filter((segment) =>
@@ -174,12 +166,6 @@ export default function DashboardPage() {
     )
   }, [segments, searchTerm])
 
-  // Calculate paginated data for tables
-  const paginatedTables = useMemo(() => {
-    const startIndex = (tablesPagination.currentPage - 1) * tablesPagination.pageSize
-    const endIndex = startIndex + tablesPagination.pageSize
-    return filteredTables.slice(startIndex, endIndex)
-  }, [filteredTables, tablesPagination])
 
   // Calculate paginated data for segments
   const paginatedSegments = useMemo(() => {
@@ -188,29 +174,16 @@ export default function DashboardPage() {
     return filteredSegments.slice(startIndex, endIndex)
   }, [filteredSegments, segmentsPagination])
 
-  // Calculate total pages for tables
-  const totalTablesPages = useMemo(() => {
-    return Math.ceil(filteredTables.length / tablesPagination.pageSize)
-  }, [filteredTables, tablesPagination.pageSize])
 
   // Calculate total pages for segments
   const totalSegmentsPages = useMemo(() => {
     return Math.ceil(filteredSegments.length / segmentsPagination.pageSize)
   }, [filteredSegments, segmentsPagination.pageSize])
 
-  // Handle page change for tables
-  const handleTablesPageChange = (page: number) => {
-    setTablesPagination((prev) => ({ ...prev, currentPage: page }))
-  }
 
   // Handle page change for segments
   const handleSegmentsPageChange = (page: number) => {
     setSegmentsPagination((prev) => ({ ...prev, currentPage: page }))
-  }
-
-  // Handle page size change for tables
-  const handleTablesPageSizeChange = (size: number) => {
-    setTablesPagination({ currentPage: 1, pageSize: size })
   }
 
   // Handle page size change for segments
@@ -218,107 +191,6 @@ export default function DashboardPage() {
     setSegmentsPagination({ currentPage: 1, pageSize: size })
   }
 
-  // Render pagination controls for tables
-  const renderTablesPagination = () => {
-    const { currentPage, pageSize } = tablesPagination
-    const startRecord = ((currentPage - 1) * pageSize) + 1
-    const endRecord = Math.min(currentPage * pageSize, filteredTables.length)
-    
-    return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pb-2">
-        <div className="text-sm text-muted-foreground">
-          Showing {startRecord}-{endRecord} of {filteredTables.length} tables
-        </div>
-        <div className="flex items-center gap-2">
-          <Select 
-            value={pageSize.toString()} 
-            onValueChange={(value) => handleTablesPageSizeChange(parseInt(value))}
-          >
-            <SelectTrigger className="w-[110px] h-8">
-              <SelectValue placeholder="Rows per page" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="5">5 per page</SelectItem>
-              <SelectItem value="10">10 per page</SelectItem>
-              <SelectItem value="20">20 per page</SelectItem>
-              <SelectItem value="50">50 per page</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  onClick={() => handleTablesPageChange(currentPage - 1)}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-              
-              {/* First page */}
-              {currentPage > 2 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => handleTablesPageChange(1)}>1</PaginationLink>
-                </PaginationItem>
-              )}
-              
-              {/* Ellipsis */}
-              {currentPage > 3 && (
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              )}
-              
-              {/* Previous page */}
-              {currentPage > 1 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => handleTablesPageChange(currentPage - 1)}>
-                    {currentPage - 1}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
-              
-              {/* Current page */}
-              <PaginationItem>
-                <PaginationLink isActive>{currentPage}</PaginationLink>
-              </PaginationItem>
-              
-              {/* Next page */}
-              {currentPage < totalTablesPages && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => handleTablesPageChange(currentPage + 1)}>
-                    {currentPage + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
-              
-              {/* Ellipsis */}
-              {currentPage < totalTablesPages - 2 && (
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              )}
-              
-              {/* Last page */}
-              {currentPage < totalTablesPages - 1 && totalTablesPages > 1 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => handleTablesPageChange(totalTablesPages)}>
-                    {totalTablesPages}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
-              
-              <PaginationItem>
-                <PaginationNext 
-                  onClick={() => handleTablesPageChange(currentPage + 1)}
-                  className={currentPage >= totalTablesPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      </div>
-    )
-  }
 
   // Render pagination controls for segments
   const renderSegmentsPagination = () => {
@@ -453,7 +325,7 @@ export default function DashboardPage() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search tables and segments..."
+              placeholder="Search segments..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -462,11 +334,6 @@ export default function DashboardPage() {
         </div>
 
         <Tabs defaultValue={defaultTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="segments">Segments</TabsTrigger>
-            <TabsTrigger value="tables">Tables</TabsTrigger>
-          </TabsList>
-
           <TabsContent value="segments" className="space-y-4">
             {filteredSegments.length > 0 ? (
               <Card>
@@ -593,64 +460,6 @@ export default function DashboardPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </TabsContent>
-
-          <TabsContent value="tables" className="space-y-4">
-            {filteredTables.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tables</CardTitle>
-                  <CardDescription>Available database tables</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Table Name</TableHead>
-                        <TableHead>Database</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedTables.map((table, index) => (
-                        <TableRow key={`table-${index}`}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center space-x-2">
-                              <Database className="h-4 w-4 text-primary" />
-                              <span>{table.tableName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{table.database || "Default"}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {table.isTemporary ? "Temporary" : "Table"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Link href={`/table/${table.tableName}`}>
-                              <Badge variant="outline" className="cursor-pointer hover:bg-accent">
-                                View
-                              </Badge>
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  
-                  {filteredTables.length > 0 && renderTablesPagination()}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="text-center py-12">
-                <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No tables found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm ? "Try adjusting your search terms." : "No tables available in the database."}
-                </p>
-              </div>
-            )}
           </TabsContent>
         </Tabs>
       </div>
