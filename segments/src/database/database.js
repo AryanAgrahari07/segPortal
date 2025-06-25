@@ -57,13 +57,18 @@ class DatabricksSQLManager {
     }
   }
 
-  async executeQuery(query, params = [], retries = MAX_RETRIES) {
+  async executeQuery(query, params = [], retries = MAX_RETRIES, schema = null) {
     try {
       await this.connect();
 
-      // Skip setting catalog/schema context to avoid permission issues
-      // We'll use the default context provided by the connection
-      // This avoids the CREATE SCHEMA permission error
+      // Use specified schema if provided, otherwise use default from env
+      if (schema) {
+        // Set the schema context for this query
+        const schemaSetQuery = `USE ${schema}`;
+        const schemaOperation = await this.session.executeStatement(schemaSetQuery);
+        await schemaOperation.close();
+        // console.log(`Using schema: ${schema} for query`);
+      }
 
       const queryOperation = await this.session.executeStatement(query, {
         parameters: params.length ? params : undefined,
@@ -79,7 +84,7 @@ class DatabricksSQLManager {
           `🔄 Retrying query (${MAX_RETRIES - retries + 1}/${MAX_RETRIES})...`
         );
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-        return this.executeQuery(query, params, retries - 1);
+        return this.executeQuery(query, params, retries - 1, schema);
       }
       throw error;
     }
@@ -88,19 +93,32 @@ class DatabricksSQLManager {
   // ===== Cleanup =====
   async close() {
     try {
-      if (this.session) await this.session.close();
-      if (this.connection) await this.connection.close();
-      console.log("🔌 Connection closed gracefully");
+      if (this.session) {
+        await this.session.close();
+        this.session = null;
+      }
+      if (this.connection) {
+        await this.connection.close();
+        this.connection = null;
+      }
+      console.log("Databricks SQL connection closed");
     } catch (error) {
-      console.error("⚠️ Error during cleanup:", error);
+      console.error("Error closing connection:", error);
     }
   }
 
-  // ===== Private Helpers =====
+  _isConnectionHealthy() {
+    return this.connection !== null && this.session !== null;
+  }
+
   _registerShutdownHook() {
-    process.on("SIGINT", async () => {
-      await this.close();
-      process.exit(0);
+    // Close connection gracefully on process termination
+    ["SIGINT", "SIGTERM"].forEach((signal) => {
+      process.on(signal, async () => {
+        console.log(`\nReceived ${signal}, closing connections...`);
+        await this.close();
+        process.exit(0);
+      });
     });
   }
 
@@ -112,30 +130,53 @@ class DatabricksSQLManager {
       const sanitizedSchema = schema.replace(/[^a-zA-Z0-9_]/g, "");
 
       console.log(
-        `Setting context to catalog: ${sanitizedCatalog}, schema: ${sanitizedSchema}`
+        `Setting context to catalog=${sanitizedCatalog}, schema=${sanitizedSchema}`
       );
 
-      await this.session.executeStatement(
-        `USE CATALOG \`${sanitizedCatalog}\``
-      );
-      await this.session.executeStatement(`USE SCHEMA \`${sanitizedSchema}\``);
+      const query = `USE ${sanitizedCatalog}.${sanitizedSchema}`;
+      const operation = await this.session.executeStatement(query);
+      await operation.close();
+
+      console.log(`✅ Context set to ${sanitizedCatalog}.${sanitizedSchema}`);
     } catch (error) {
-      console.error("Error setting catalog/schema context:", error);
-      // Continue execution even if context setting fails
+      console.error("❌ Error setting context:", error);
+      throw error;
     }
-  }
-
-  _isConnectionHealthy() {
-    return this.connection && !this.connection.closed && this.session;
   }
 }
 
-// ===== Singleton Instance =====
-const databricksSQL = new DatabricksSQLManager();
+// ==== Singleton Instance ====
+const manager = new DatabricksSQLManager();
 
-// ===== Export for Application Use =====
+// ==== Exported Functions ====
+const connect = async () => {
+  return await manager.connect();
+};
+
+const executeQuery = async (query, params = [], schema = null) => {
+  return await manager.executeQuery(query, params, MAX_RETRIES, schema);
+};
+
+// Add function to execute query in gold schema
+const executeGoldSchemaQuery = async (query, params = []) => {
+  const goldSchema = process.env.GOLD_SCHEMA || 'uat.gold';
+  return await manager.executeQuery(query, params, MAX_RETRIES, goldSchema);
+};
+
+// Add function to execute query in app schema
+const executeAppSchemaQuery = async (query, params = []) => {
+  const appSchema = process.env.APP_SCHEMA || process.env.DB_NAME;
+  return await manager.executeQuery(query, params, MAX_RETRIES, appSchema);
+};
+
+const close = async () => {
+  return await manager.close();
+};
+
 module.exports = {
-  connect: () => databricksSQL.connect(),
-  executeQuery: (query, params) => databricksSQL.executeQuery(query, params),
-  close: () => databricksSQL.close(),
+  connect,
+  executeQuery,
+  executeGoldSchemaQuery,
+  executeAppSchemaQuery,
+  close,
 };

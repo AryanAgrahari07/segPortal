@@ -14,6 +14,7 @@ const { sanitizeInput } = require("./src/middleware/security.js");
 // console.log(process.env.DATABRICKS_PATH);
 // console.log(process.env.DATABRICKS_TOKEN);
 // console.log(process.env.DB_NAME);
+// console.log(process.env.GOLD_SCHEMA);
 
 // Check required environment variables
 const checkRequiredEnvVars = () => {
@@ -23,6 +24,12 @@ const checkRequiredEnvVars = () => {
     "DATABRICKS_TOKEN",
     "DB_NAME",
   ];
+
+  // GOLD_SCHEMA is optional, will default to uat.gold if not provided
+  if (!process.env.GOLD_SCHEMA) {
+    console.log("⚠️ GOLD_SCHEMA environment variable not found, defaulting to 'uat.gold'");
+    process.env.GOLD_SCHEMA = "uat.gold";
+  }
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
@@ -90,6 +97,8 @@ const startServer = async () => {
     // Start listening
     app.listen(PORT, () => {
       console.log(`\n🚀 Server is running on port ${PORT}`);
+      console.log(`🔍 Using app schema: ${process.env.DB_NAME}`);
+      console.log(`🔍 Using gold schema: ${process.env.GOLD_SCHEMA}`);
     });
   } catch (error) {
     console.error("❌ Server startup failed:", error);

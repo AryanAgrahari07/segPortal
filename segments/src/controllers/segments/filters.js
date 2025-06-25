@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database.js');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
 
 // Helper function to escape SQL string values
@@ -56,7 +56,7 @@ exports.createFilter = async (req, res) => {
       )
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     return res.status(201).json({
       success: true,
@@ -101,7 +101,7 @@ exports.getFiltersByGroupId = async (req, res) => {
       ORDER BY filter_order
     `;
 
-    const filters = await executeQuery(query);
+    const filters = await executeAppSchemaQuery(query);
 
     return res.status(200).json({
       success: true,
@@ -134,7 +134,7 @@ exports.getFilterById = async (req, res) => {
       WHERE id = ${escapeSQLString(filterId)}
     `;
 
-    const result = await executeQuery(query);
+    const result = await executeAppSchemaQuery(query);
 
     if (!result || result.length === 0) {
       return res.status(404).json({
@@ -208,10 +208,10 @@ exports.updateFilter = async (req, res) => {
       WHERE id = ${escapeSQLString(filterId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     // Fetch and return updated filter
-    const updatedFilter = await executeQuery(
+    const updatedFilter = await executeAppSchemaQuery(
       `SELECT * FROM filters WHERE id = ${escapeSQLString(filterId)}`
     );
 
@@ -254,7 +254,7 @@ exports.deleteFilter = async (req, res) => {
       WHERE id = ${escapeSQLString(filterId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     return res.status(200).json({
       success: true,

@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const { executeQuery } = require('../database/database');
+const { executeQuery, executeAppSchemaQuery } = require('../database/database');
 
 // Helper function to escape SQL string values
 const escapeSQLString = (str) => {
@@ -41,7 +41,7 @@ class AuthService {
       SET is_active = false 
       WHERE user_id = ${escapeSQLString(userId)}
     `;
-    await executeQuery(deactivateQuery);
+    await executeAppSchemaQuery(deactivateQuery);
 
     // Create new session
     const query = `
@@ -60,14 +60,14 @@ class AuthService {
       )
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     // Get the created session
     const getSessionQuery = `
       SELECT * FROM user_sessions 
       WHERE session_id = ${escapeSQLString(sessionId)}
     `;
-    const result = await executeQuery(getSessionQuery);
+    const result = await executeAppSchemaQuery(getSessionQuery);
 
     return result[0];
   }
@@ -82,7 +82,7 @@ class AuthService {
       WHERE session_id = ${escapeSQLString(sessionId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
   }
 
   // Validate refresh token and return session info
@@ -101,7 +101,7 @@ class AuthService {
         AND us.expires_at > CURRENT_TIMESTAMP()
       `;
 
-      const result = await executeQuery(query);
+      const result = await executeAppSchemaQuery(query);
 
       if (!result || result.length === 0) {
         throw new Error('Invalid refresh token');
@@ -121,7 +121,7 @@ class AuthService {
       SET is_active = false 
       WHERE session_id = ${escapeSQLString(sessionId)}
     `;
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
   }
 }
 

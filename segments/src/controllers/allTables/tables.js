@@ -1,14 +1,14 @@
-const {executeQuery} = require('../../database/database.js');
+const {executeGoldSchemaQuery} = require('../../database/database.js');
 
 
 const getAllTables = async (req, res) => {
   try {
-    // Query to get all tables from the database
+    // Query to get all tables from the gold schema
     const query = `
       SHOW TABLES
     `;
 
-    const result = await executeQuery(query);
+    const result = await executeGoldSchemaQuery(query);
 
     // Return the list of tables
     return res.status(200).json({

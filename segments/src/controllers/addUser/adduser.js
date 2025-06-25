@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database.js');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
@@ -54,7 +54,7 @@ exports.isAdmin = async (req, res, next) => {
       WHERE user_id = ${escapeSQLString(userId)} AND is_active = true
     `;
     
-    const result = await executeQuery(query);
+    const result = await executeAppSchemaQuery(query);
     
     if (!result || result.length === 0) {
       return res.status(404).json({
@@ -97,7 +97,7 @@ exports.addUser = async (req, res) => {
       WHERE email = ${escapeSQLString(userData.email.toLowerCase().trim())}
     `;
     
-    const existingUser = await executeQuery(checkQuery);
+    const existingUser = await executeAppSchemaQuery(checkQuery);
     
     if (existingUser && existingUser.length > 0) {
       return res.status(409).json({
@@ -140,7 +140,7 @@ exports.addUser = async (req, res) => {
       )
     `;
     
-    await executeQuery(insertQuery);
+    await executeAppSchemaQuery(insertQuery);
     
     // Return success without exposing password hash
     return res.status(201).json({
@@ -184,7 +184,7 @@ exports.getAllUsers = async (req, res) => {
       ORDER BY created_at DESC
     `;
     
-    const users = await executeQuery(query);
+    const users = await executeAppSchemaQuery(query);
     
     return res.status(200).json({
       success: true,
@@ -220,7 +220,7 @@ exports.updateUserStatus = async (req, res) => {
       WHERE user_id = ${escapeSQLString(userId)}
     `;
     
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
     
     // Get updated user
     const updatedUserQuery = `
@@ -237,7 +237,7 @@ exports.updateUserStatus = async (req, res) => {
       WHERE user_id = ${escapeSQLString(userId)}
     `;
     
-    const updatedUser = await executeQuery(updatedUserQuery);
+    const updatedUser = await executeAppSchemaQuery(updatedUserQuery);
     
     if (!updatedUser || updatedUser.length === 0) {
       return res.status(404).json({
@@ -281,7 +281,7 @@ exports.updateUserRole = async (req, res) => {
       WHERE user_id = ${escapeSQLString(userId)}
     `;
     
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
     
     // Get updated user
     const updatedUserQuery = `
@@ -298,7 +298,7 @@ exports.updateUserRole = async (req, res) => {
       WHERE user_id = ${escapeSQLString(userId)}
     `;
     
-    const updatedUser = await executeQuery(updatedUserQuery);
+    const updatedUser = await executeAppSchemaQuery(updatedUserQuery);
     
     if (!updatedUser || updatedUser.length === 0) {
       return res.status(404).json({

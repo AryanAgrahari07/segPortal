@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database.js');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
@@ -30,7 +30,7 @@ exports.getAllSegments = async (req, res) => {
       ORDER BY created_at DESC
     `;
 
-    const results = await executeQuery(query);
+    const results = await executeAppSchemaQuery(query);
 
     // Parse JSON strings back to objects
     const segments = results.map(segment => {
@@ -105,7 +105,7 @@ exports.createSegment = async (req, res) => {
       )
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     // Process filter groups and filters if they exist
     if (segmentData.filter_groups && Array.isArray(segmentData.filter_groups) && segmentData.filter_groups.length > 0) {
@@ -141,7 +141,7 @@ exports.createSegment = async (req, res) => {
           )
         `;
         
-        await executeQuery(groupQuery);
+        await executeAppSchemaQuery(groupQuery);
         
         // Process filters in this group
         if (group.filters && Array.isArray(group.filters) && group.filters.length > 0) {
@@ -175,7 +175,7 @@ exports.createSegment = async (req, res) => {
               )
             `;
             
-            await executeQuery(filterQuery);
+            await executeAppSchemaQuery(filterQuery);
           }
         }
       }
@@ -214,7 +214,7 @@ exports.getSegmentById = async (req, res) => {
       AND is_active = TRUE
     `;
 
-    const segmentResult = await executeQuery(segmentQuery);
+    const segmentResult = await executeAppSchemaQuery(segmentQuery);
 
     if (!segmentResult || segmentResult.length === 0) {
       return res.status(404).json({
@@ -233,7 +233,7 @@ exports.getSegmentById = async (req, res) => {
       ORDER BY group_order
     `;
 
-    const filterGroups = await executeQuery(groupsQuery);
+    const filterGroups = await executeAppSchemaQuery(groupsQuery);
     
     // Get filters for each group
     const enhancedFilterGroups = [];
@@ -245,7 +245,7 @@ exports.getSegmentById = async (req, res) => {
         ORDER BY filter_order
       `;
       
-      const filters = await executeQuery(filtersQuery);
+      const filters = await executeAppSchemaQuery(filtersQuery);
       
       enhancedFilterGroups.push({
         ...group,
@@ -337,7 +337,7 @@ exports.updateSegment = async (req, res) => {
       WHERE segment_id = ${escapeSQLString(segmentId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     // Update filter groups and filters if provided
     if (updateData.filter_groups && Array.isArray(updateData.filter_groups)) {
@@ -349,13 +349,13 @@ exports.updateSegment = async (req, res) => {
           WHERE segment_id = ${escapeSQLString(segmentId)}
         )
       `;
-      await executeQuery(deleteFiltersQuery);
+      await executeAppSchemaQuery(deleteFiltersQuery);
 
       const deleteGroupsQuery = `
         DELETE FROM filter_groups
         WHERE segment_id = ${escapeSQLString(segmentId)}
       `;
-      await executeQuery(deleteGroupsQuery);
+      await executeAppSchemaQuery(deleteGroupsQuery);
 
       // Then insert the new ones
       for (let i = 0; i < updateData.filter_groups.length; i++) {
@@ -390,7 +390,7 @@ exports.updateSegment = async (req, res) => {
           )
         `;
         
-        await executeQuery(groupQuery);
+        await executeAppSchemaQuery(groupQuery);
         
         // Process filters in this group
         if (group.filters && Array.isArray(group.filters) && group.filters.length > 0) {
@@ -424,14 +424,14 @@ exports.updateSegment = async (req, res) => {
               )
             `;
             
-            await executeQuery(filterQuery);
+            await executeAppSchemaQuery(filterQuery);
           }
         }
       }
     }
 
     // Fetch and return updated segment with filter groups and filters
-    const updatedSegment = await executeQuery(
+    const updatedSegment = await executeAppSchemaQuery(
       `SELECT * FROM segments WHERE segment_id = ${escapeSQLString(segmentId)}`
     );
 
@@ -452,7 +452,7 @@ exports.updateSegment = async (req, res) => {
       ORDER BY group_order
     `;
 
-    const filterGroups = await executeQuery(groupsQuery);
+    const filterGroups = await executeAppSchemaQuery(groupsQuery);
     
     // Get filters for each group
     const enhancedFilterGroups = [];
@@ -464,7 +464,7 @@ exports.updateSegment = async (req, res) => {
         ORDER BY filter_order
       `;
       
-      const filters = await executeQuery(filtersQuery);
+      const filters = await executeAppSchemaQuery(filtersQuery);
       
       enhancedFilterGroups.push({
         ...group,
@@ -519,7 +519,7 @@ exports.deleteSegment = async (req, res) => {
       WHERE email = ${escapeSQLString(userId)}
     `;
     
-    const userResult = await executeQuery(userRoleQuery);
+    const userResult = await executeAppSchemaQuery(userRoleQuery);
     
     if (!userResult || userResult.length === 0) {
       return res.status(404).json({
@@ -538,7 +538,7 @@ exports.deleteSegment = async (req, res) => {
       AND is_active = TRUE
     `;
     
-    const segmentResult = await executeQuery(segmentQuery);
+    const segmentResult = await executeAppSchemaQuery(segmentQuery);
     
     if (!segmentResult || segmentResult.length === 0) {
       return res.status(404).json({
@@ -564,7 +564,7 @@ exports.deleteSegment = async (req, res) => {
           updated_at = CURRENT_TIMESTAMP()
       WHERE segment_id = ${escapeSQLString(segmentId)}
     `;
-    await executeQuery(softDeleteQuery);
+    await executeAppSchemaQuery(softDeleteQuery);
 
     return res.status(200).json({
       success: true,
@@ -606,7 +606,7 @@ exports.toggleSegmentStatus = async (req, res) => {
       WHERE email = ${escapeSQLString(userId)}
     `;
     
-    const userResult = await executeQuery(userRoleQuery);
+    const userResult = await executeAppSchemaQuery(userRoleQuery);
     
     if (!userResult || userResult.length === 0) {
       return res.status(404).json({
@@ -624,7 +624,7 @@ exports.toggleSegmentStatus = async (req, res) => {
       AND is_active = TRUE
     `;
     
-    const segmentResult = await executeQuery(segmentQuery);
+    const segmentResult = await executeAppSchemaQuery(segmentQuery);
     
     if (!segmentResult || segmentResult.length === 0) {
       return res.status(404).json({
@@ -651,7 +651,7 @@ exports.toggleSegmentStatus = async (req, res) => {
       WHERE segment_id = ${escapeSQLString(segmentId)}
     `;
     
-    await executeQuery(updateStatusQuery);
+    await executeAppSchemaQuery(updateStatusQuery);
 
     return res.status(200).json({
       success: true,
@@ -686,7 +686,7 @@ exports.updateLastExecuted = async (req, res) => {
       WHERE segment_id = ${escapeSQLString(segmentId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     return res.status(200).json({
       success: true,

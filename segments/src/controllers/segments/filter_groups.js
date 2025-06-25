@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database.js');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
 
 // Helper function to escape SQL string values
@@ -41,7 +41,7 @@ exports.createFilterGroup = async (req, res) => {
       )
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     return res.status(201).json({
       success: true,
@@ -83,7 +83,7 @@ exports.getFilterGroupsBySegmentId = async (req, res) => {
       ORDER BY group_order
     `;
 
-    const filterGroups = await executeQuery(query);
+    const filterGroups = await executeAppSchemaQuery(query);
 
     return res.status(200).json({
       success: true,
@@ -116,7 +116,7 @@ exports.getFilterGroupById = async (req, res) => {
       WHERE id = ${escapeSQLString(groupId)}
     `;
 
-    const result = await executeQuery(query);
+    const result = await executeAppSchemaQuery(query);
 
     if (!result || result.length === 0) {
       return res.status(404).json({
@@ -185,10 +185,10 @@ exports.updateFilterGroup = async (req, res) => {
       WHERE id = ${escapeSQLString(groupId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     // Fetch and return updated filter group
-    const updatedFilterGroup = await executeQuery(
+    const updatedFilterGroup = await executeAppSchemaQuery(
       `SELECT * FROM filter_groups WHERE id = ${escapeSQLString(groupId)}`
     );
 
@@ -227,7 +227,7 @@ exports.deleteFilterGroup = async (req, res) => {
     }
 
     // First, delete all filters in this group
-    await executeQuery(`
+    await executeAppSchemaQuery(`
       DELETE FROM filters
       WHERE filter_group_id = ${escapeSQLString(groupId)}
     `);
@@ -238,7 +238,7 @@ exports.deleteFilterGroup = async (req, res) => {
       WHERE id = ${escapeSQLString(groupId)}
     `;
 
-    await executeQuery(query);
+    await executeAppSchemaQuery(query);
 
     return res.status(200).json({
       success: true,

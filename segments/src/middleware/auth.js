@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const {
   executeQuery,
+  executeAppSchemaQuery
 } = require("../database/database.js");
 
 const escapeSQLString = (str) => {
@@ -35,7 +36,7 @@ const verifyToken = async (req, res, next) => {
                 WHERE us.session_id = ${escapeSQLString(sessionId)} AND us.user_id = ${escapeSQLString(decoded.user_id)} AND us.is_active = true
                 AND us.expires_at > CURRENT_TIMESTAMP()
             `;
-      const result = await executeQuery(sessionQuery);
+      const result = await executeAppSchemaQuery(sessionQuery);
 
       console.log("result is", result);
       if (result.length === 0 || !result[0].is_active) {

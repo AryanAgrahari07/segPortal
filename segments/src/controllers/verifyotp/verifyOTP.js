@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database');
 const bcrypt = require('bcrypt');
 const UAParser = require('ua-parser-js');
 const authService = require('../../services/authService.js');
@@ -50,7 +50,7 @@ exports.verifyOTP = async (req, res) => {
         WHERE email = ${escapeSQLString(sanitizedEmail)}
       `;
 
-      const userResult = await executeQuery(userQuery);
+      const userResult = await executeAppSchemaQuery(userQuery);
 
       if (!userResult || userResult.length === 0) {
         return res.status(404).json({
@@ -77,7 +77,7 @@ exports.verifyOTP = async (req, res) => {
       AND expires_at >= CURRENT_TIMESTAMP()
     `;
 
-    const result = await executeQuery(getOtpQuery);
+    const result = await executeAppSchemaQuery(getOtpQuery);
 
     if (result && result.length > 0) {
       const storedHashedOTP = result[0].OTP;
@@ -94,7 +94,7 @@ exports.verifyOTP = async (req, res) => {
           WHERE email = ${escapeSQLString(email)}
           AND user_id = ${escapeSQLString(otpUserId)}
         `;
-        await executeQuery(updateQuery);
+        await executeAppSchemaQuery(updateQuery);
 
           // get existing user
           const userQuery = `
@@ -102,7 +102,7 @@ exports.verifyOTP = async (req, res) => {
             FROM users
             WHERE email = ${escapeSQLString(sanitizedEmail)} AND is_active = true
           `;
-          const userResult = await executeQuery(userQuery);
+          const userResult = await executeAppSchemaQuery(userQuery);
           const user = userResult[0];
 
           if (userResult.length === 0) {
@@ -125,7 +125,7 @@ exports.verifyOTP = async (req, res) => {
           SET is_active = false 
           WHERE user_id = ${escapeSQLString(user.user_id)}
         `;
-        await executeQuery(query);
+        await executeAppSchemaQuery(query);
 
 
         // Generate tokens
@@ -146,7 +146,7 @@ exports.verifyOTP = async (req, res) => {
           WHERE email = ${escapeSQLString(sanitizedEmail)}
           AND user_id = ${escapeSQLString(user.user_id)}
         `;
-        await executeQuery(otpquery);
+        await executeAppSchemaQuery(otpquery);
         
 
          // Determine redirect path based on role
@@ -230,7 +230,7 @@ exports.verifyOTP = async (req, res) => {
         AND expires_at < CURRENT_TIMESTAMP()
       `;
 
-      const expiredResult = await executeQuery(checkExpiredQuery);
+      const expiredResult = await executeAppSchemaQuery(checkExpiredQuery);
 
       if (expiredResult && expiredResult.length > 0) {
         return res.status(400).json({
@@ -249,7 +249,7 @@ exports.verifyOTP = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while verifying OTP.',
+      message: 'An error occurred while verifying OTP',
       error: error.message,
     });
   }

@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database.js');
+const { executeQuery, executeGoldSchemaQuery, executeAppSchemaQuery } = require('../../database/database.js');
 require('dotenv').config();
 
 // Helper function to escape SQL string values
@@ -157,7 +157,7 @@ exports.getTableData = async (req, res) => {
       
       // Check for columns that might contain email (looking for common email column names)
       const columnCheckQuery = `DESCRIBE TABLE ${quotedTableName}`;
-      const columns = await executeQuery(columnCheckQuery);
+      const columns = await executeGoldSchemaQuery(columnCheckQuery);
       
       // Look for column names that likely contain email data
       const emailColumnPattern = /email|e_mail|mail|email_address/i;
@@ -181,7 +181,7 @@ exports.getTableData = async (req, res) => {
         
         // Count total rows
         const countSql = `SELECT COUNT(*) AS total FROM (${customSql}) AS countQuery`;
-        const countResult = await executeQuery(countSql);
+        const countResult = await executeGoldSchemaQuery(countSql);
         const total = countResult[0].total;
         
         // Count unique emails if email column exists
@@ -189,7 +189,7 @@ exports.getTableData = async (req, res) => {
         if (emailColumnExists) {
           const uniqueEmailSql = `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM (${customSql}) AS emailQuery`;
           try {
-            const uniqueEmailResult = await executeQuery(uniqueEmailSql);
+            const uniqueEmailResult = await executeGoldSchemaQuery(uniqueEmailSql);
             uniqueEmailCount = uniqueEmailResult[0].unique_emails;
           } catch (emailError) {
             console.error('Error counting unique emails in custom SQL:', emailError);
@@ -199,7 +199,7 @@ exports.getTableData = async (req, res) => {
         
         // Apply pagination to the SQL
         const paginatedSql = `SELECT * FROM (${customSql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
-        const data = await executeQuery(paginatedSql);
+        const data = await executeGoldSchemaQuery(paginatedSql);
         
         // Calculate total pages
         const totalPages = Math.ceil(total / pageSize);
@@ -298,14 +298,14 @@ exports.getTableData = async (req, res) => {
     }
     
     // Execute the count query first
-    const countResult = await executeQuery(countQuery);
+    const countResult = await executeGoldSchemaQuery(countQuery);
     const total = countResult[0].total;
     
     // Execute unique email count query if applicable
     let uniqueEmailCount = null;
     if (uniqueEmailQuery) {
       try {
-        const uniqueEmailResult = await executeQuery(uniqueEmailQuery);
+        const uniqueEmailResult = await executeGoldSchemaQuery(uniqueEmailQuery);
         uniqueEmailCount = uniqueEmailResult[0].unique_emails;
       } catch (emailError) {
         console.error('Error counting unique emails:', emailError);
@@ -314,7 +314,7 @@ exports.getTableData = async (req, res) => {
     }
     
     // Execute the data query
-    const data = await executeQuery(dataQuery);
+    const data = await executeGoldSchemaQuery(dataQuery);
     
     // Calculate total pages
     const totalPages = Math.ceil(total / pageSize);
@@ -371,7 +371,7 @@ exports.getTableDataWithSegment = async (req, res) => {
     
     // Get segment data
     const segmentQuery = `SELECT * FROM segments WHERE segment_id = ${escapeSQLString(segmentId)}`;
-    const segmentResult = await executeQuery(segmentQuery);
+    const segmentResult = await executeAppSchemaQuery(segmentQuery);
     
     if (!segmentResult || segmentResult.length === 0) {
       return res.status(404).json({
@@ -384,7 +384,7 @@ exports.getTableDataWithSegment = async (req, res) => {
     
     // Get filter groups data with their conditions
     const filterGroupsQuery = `SELECT * FROM filter_groups WHERE segment_id = ${escapeSQLString(segmentId)} ORDER BY group_order`;
-    const filterGroupsResult = await executeQuery(filterGroupsQuery);
+    const filterGroupsResult = await executeAppSchemaQuery(filterGroupsQuery);
     
     // Determine which SQL to use (custom or generated)
     let sql;
@@ -459,17 +459,17 @@ exports.getTableDataWithSegment = async (req, res) => {
         console.log('Executing segment query:', dataQuery);
         
         // Execute the count query first
-        const countResult = await executeQuery(countQuery);
+        const countResult = await executeGoldSchemaQuery(countQuery);
         const total = countResult[0].total;
         
         // Execute the data query
-        const data = await executeQuery(dataQuery);
+        const data = await executeGoldSchemaQuery(dataQuery);
         
         // Calculate total pages
         const totalPages = Math.ceil(total / pageSize);
         
         // Update last executed timestamp
-        await executeQuery(`
+        await executeAppSchemaQuery(`
           UPDATE segments
           SET last_executed = CURRENT_TIMESTAMP(),
               updated_at = CURRENT_TIMESTAMP()
@@ -508,18 +508,18 @@ exports.getTableDataWithSegment = async (req, res) => {
       
       // Count total rows
       const countSql = `SELECT COUNT(*) AS total FROM (${sql}) AS countQuery`;
-      const countResult = await executeQuery(countSql);
+      const countResult = await executeGoldSchemaQuery(countSql);
       const total = countResult[0].total;
       
       // Apply pagination to the SQL
       const paginatedSql = `SELECT * FROM (${sql}) AS dataQuery ORDER BY id LIMIT ${pageSize} OFFSET ${offset}`;
-      const data = await executeQuery(paginatedSql);
+      const data = await executeGoldSchemaQuery(paginatedSql);
       
       // Calculate total pages
       const totalPages = Math.ceil(total / pageSize);
       
       // Update last executed timestamp
-      await executeQuery(`
+      await executeAppSchemaQuery(`
         UPDATE segments
         SET last_executed = CURRENT_TIMESTAMP(),
             updated_at = CURRENT_TIMESTAMP()
@@ -608,7 +608,7 @@ exports.getTableMetadata = async (req, res) => {
     const query = `DESCRIBE TABLE ${quotedTableName}`;
     
     console.log('Executing query:', query);
-    const columns = await executeQuery(query);
+    const columns = await executeGoldSchemaQuery(query);
     
     return res.status(200).json({
       success: true,

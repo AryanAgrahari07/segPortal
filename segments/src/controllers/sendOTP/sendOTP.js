@@ -1,4 +1,4 @@
-const { executeQuery } = require('../../database/database');
+const { executeQuery, executeAppSchemaQuery } = require('../../database/database');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
@@ -84,7 +84,7 @@ exports.sendOTP = async (req, res) => {
     try {
         // Check if user exists
         const checkUserQuery = "SELECT user_id, email FROM users WHERE email = '" + sanitizedEmail + "'";
-        const userExists = await executeQuery(checkUserQuery);
+        const userExists = await executeAppSchemaQuery(checkUserQuery);
 
         if (userExists.length === 0) {
             return res.status(404).json({
@@ -104,7 +104,7 @@ exports.sendOTP = async (req, res) => {
 
         // Delete any existing OTP for this email
         const deleteQuery = `DELETE FROM OTP_tracker WHERE email = '${sanitizedEmail}' AND user_id = '${user_id}'`;
-        await executeQuery(deleteQuery);
+        await executeAppSchemaQuery(deleteQuery);
 
         // Insert new hashed OTP
         const insertOtpQuery = `
@@ -112,7 +112,7 @@ exports.sendOTP = async (req, res) => {
             VALUES ('${sanitizedEmail}', '${user_id}', '${hashedOTP}', false, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP() + INTERVAL 60 SECOND)
         `;
 
-        await executeQuery(insertOtpQuery);
+        await executeAppSchemaQuery(insertOtpQuery);
 
         // Send OTP via email
         try {
