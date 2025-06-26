@@ -186,7 +186,7 @@ exports.verifyOTP = async (req, res) => {
         } else {
           res.cookie('sessionid', session.session_id, {
             httpOnly: false,
-            secure: true,
+            secure: false,
             sameSite: process.env.SAME_SITE || "None",
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
@@ -195,7 +195,7 @@ exports.verifyOTP = async (req, res) => {
 
           res.cookie('refreshtoken', refreshToken, {
             httpOnly: false,
-            secure: true,
+            secure: false,
             sameSite: process.env.SAME_SITE || "None",
             domain: process.env.COOKIE_DOMAIN,
             path: '/',
