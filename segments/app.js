@@ -48,7 +48,7 @@ const checkRequiredEnvVars = () => {
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "*",
+    origin: process.env.FRONTEND || "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
