@@ -18,7 +18,7 @@ class AuthService {
         full_name: user.full_name,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '30m' } // 30m expiry balancing security and user experience
+      { expiresIn: '2m' } // 30m expiry balancing security and user experience
     );
   }
 

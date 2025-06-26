@@ -138,6 +138,7 @@ exports.getTableData = async (req, res) => {
     // First, check if the table has an email column
     let emailColumnExists = false;
     let emailColumnName = '';
+    let tableColumns = [];
     
     try {
       // Handle multi-part table names (catalog.schema.table)
@@ -155,9 +156,12 @@ exports.getTableData = async (req, res) => {
         quotedTableName = `\`${tableName}\``;
       }
       
-      // Check for columns that might contain email (looking for common email column names)
+      // Get all columns from the table to avoid column mismatch errors
       const columnCheckQuery = `DESCRIBE TABLE ${quotedTableName}`;
       const columns = await executeGoldSchemaQuery(columnCheckQuery);
+      
+      // Store column names for later use
+      tableColumns = columns.map(col => col.col_name || col.name || '');
       
       // Look for column names that likely contain email data
       const emailColumnPattern = /email|e_mail|mail|email_address/i;
@@ -227,9 +231,12 @@ exports.getTableData = async (req, res) => {
       }
     }
     
-    // Build the base SQL query
+    // Use specific columns instead of '*' to avoid column mismatch errors
+    const columnsToSelect = tableColumns.length > 0 ? tableColumns.map(col => `\`${col}\``).join(', ') : '*';
+    
+    // Build the base SQL query with specific columns
     let countQuery = `SELECT COUNT(*) AS total FROM ${tableName}`;
-    let dataQuery = `SELECT * FROM ${tableName}`;
+    let dataQuery = `SELECT ${columnsToSelect} FROM ${tableName}`;
     let uniqueEmailQuery = emailColumnExists ? `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM ${tableName}` : null;
     
     // Apply filters if provided
@@ -314,24 +321,65 @@ exports.getTableData = async (req, res) => {
     }
     
     // Execute the data query
-    const data = await executeGoldSchemaQuery(dataQuery);
-    
-    // Calculate total pages
-    const totalPages = Math.ceil(total / pageSize);
-    
-    return res.status(200).json({
-      success: true,
-      data: {
-        rows: data,
-        pagination: {
-          total,
-          page,
-          pageSize,
-          totalPages
-        },
-        uniqueEmails: uniqueEmailCount
+    try {
+      const data = await executeGoldSchemaQuery(dataQuery);
+      
+      // Calculate total pages
+      const totalPages = Math.ceil(total / pageSize);
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          rows: data,
+          pagination: {
+            total,
+            page,
+            pageSize,
+            totalPages
+          },
+          uniqueEmails: uniqueEmailCount
+        }
+      });
+    } catch (error) {
+      console.error('Error executing data query:', error);
+      
+      // Fallback: If error occurs with all columns, try with a subset of safe columns
+      if (tableColumns.length > 0) {
+        try {
+          console.log('Attempting fallback query with limited columns...');
+          
+          // Get first 10 columns only to reduce chance of errors
+          const safeColumns = tableColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
+          const fallbackQuery = `SELECT ${safeColumns} FROM ${tableName} LIMIT ${pageSize} OFFSET ${offset}`;
+          
+          console.log('Executing fallback query:', fallbackQuery);
+          const fallbackData = await executeGoldSchemaQuery(fallbackQuery);
+          
+          // Calculate total pages
+          const totalPages = Math.ceil(total / pageSize);
+          
+          return res.status(200).json({
+            success: true,
+            data: {
+              rows: fallbackData,
+              pagination: {
+                total,
+                page,
+                pageSize,
+                totalPages
+              },
+              uniqueEmails: uniqueEmailCount,
+              limited_columns: true
+            }
+          });
+        } catch (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError);
+          throw error; // Throw original error
+        }
+      } else {
+        throw error;
       }
-    });
+    }
   } catch (error) {
     console.error('Error fetching table data:', error);
     return res.status(500).json({
@@ -369,6 +417,38 @@ exports.getTableDataWithSegment = async (req, res) => {
       });
     }
     
+    // Get table columns to avoid column mismatch errors
+    let tableColumns = [];
+    try {
+      // Handle multi-part table names (catalog.schema.table)
+      const parts = tableName.split('.');
+      let quotedTableName;
+      
+      if (parts.length === 3) {
+        // Format: catalog.schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\`.\`${parts[2]}\``;
+      } else if (parts.length === 2) {
+        // Format: schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\``;
+      } else {
+        // Format: just table
+        quotedTableName = `\`${tableName}\``;
+      }
+      
+      // Get all columns from the table
+      const columnCheckQuery = `DESCRIBE TABLE ${quotedTableName}`;
+      const columns = await executeGoldSchemaQuery(columnCheckQuery);
+      
+      // Store column names for later use
+      tableColumns = columns.map(col => col.col_name || col.name || '');
+    } catch (error) {
+      console.error('Error checking table columns:', error);
+      // Continue with the request even if we can't determine the columns
+    }
+    
+    // Use specific columns instead of '*' to avoid column mismatch errors
+    const columnsToSelect = tableColumns.length > 0 ? tableColumns.map(col => `\`${col}\``).join(', ') : '*';
+    
     // Get segment data
     const segmentQuery = `SELECT * FROM segments WHERE segment_id = ${escapeSQLString(segmentId)}`;
     const segmentResult = await executeAppSchemaQuery(segmentQuery);
@@ -399,9 +479,9 @@ exports.getTableDataWithSegment = async (req, res) => {
       try {
         const segmentConfig = JSON.parse(segment.segment_config);
         
-        // Build base queries
+        // Build base queries with specific columns
         let countQuery = `SELECT COUNT(*) AS total FROM ${tableName}`;
-        let dataQuery = `SELECT * FROM ${tableName}`;
+        let dataQuery = `SELECT ${columnsToSelect} FROM ${tableName}`;
         
         // Apply filters from segment config
         if (segmentConfig.filterGroups && Array.isArray(segmentConfig.filterGroups)) {
@@ -462,8 +542,114 @@ exports.getTableDataWithSegment = async (req, res) => {
         const countResult = await executeGoldSchemaQuery(countQuery);
         const total = countResult[0].total;
         
-        // Execute the data query
-        const data = await executeGoldSchemaQuery(dataQuery);
+        // Execute the data query with error handling
+        try {
+          const data = await executeGoldSchemaQuery(dataQuery);
+          
+          // Calculate total pages
+          const totalPages = Math.ceil(total / pageSize);
+          
+          // Update last executed timestamp
+          await executeAppSchemaQuery(`
+            UPDATE segments
+            SET last_executed = CURRENT_TIMESTAMP(),
+                updated_at = CURRENT_TIMESTAMP()
+            WHERE segment_id = ${escapeSQLString(segmentId)}
+          `);
+          
+          return res.status(200).json({
+            success: true,
+            data: {
+              rows: data,
+              segment: {
+                segment_id: segment.segment_id,
+                segment_name: segment.segment_name
+              },
+              pagination: {
+                total,
+                page,
+                pageSize,
+                totalPages
+              }
+            }
+          });
+        } catch (dataError) {
+          console.error('Error executing segment data query:', dataError);
+          
+          // Fallback: If error occurs with all columns, try with a subset of safe columns
+          if (tableColumns.length > 0) {
+            console.log('Attempting fallback query with limited columns...');
+            
+            // Get first 10 columns only to reduce chance of errors
+            const safeColumns = tableColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
+            const fallbackQuery = `SELECT ${safeColumns} FROM ${tableName}${whereClause ? whereClause : ''} LIMIT ${pageSize} OFFSET ${offset}`;
+            
+            console.log('Executing fallback query:', fallbackQuery);
+            const fallbackData = await executeGoldSchemaQuery(fallbackQuery);
+            
+            // Calculate total pages
+            const totalPages = Math.ceil(total / pageSize);
+            
+            // Update last executed timestamp
+            await executeAppSchemaQuery(`
+              UPDATE segments
+              SET last_executed = CURRENT_TIMESTAMP(),
+                  updated_at = CURRENT_TIMESTAMP()
+              WHERE segment_id = ${escapeSQLString(segmentId)}
+            `);
+            
+            return res.status(200).json({
+              success: true,
+              data: {
+                rows: fallbackData,
+                segment: {
+                  segment_id: segment.segment_id,
+                  segment_name: segment.segment_name
+                },
+                pagination: {
+                  total,
+                  page,
+                  pageSize,
+                  totalPages
+                },
+                limited_columns: true
+              }
+            });
+          } else {
+            throw dataError;
+          }
+        }
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid segment configuration',
+          error: error.message
+        });
+      }
+    }
+    
+    // If we have direct SQL (custom or generated), execute it with pagination
+    try {
+      // For direct SQL, we need to modify it to support pagination
+      // This is a simplified approach and might need adjustments based on your SQL dialect
+      
+      // Count total rows
+      const countSql = `SELECT COUNT(*) AS total FROM (${sql}) AS countQuery`;
+      const countResult = await executeGoldSchemaQuery(countSql);
+      const total = countResult[0].total;
+      
+      // Apply pagination to the SQL
+      // If the sql contains SELECT *, replace it with specific columns if available
+      let paginatedSql = sql;
+      if (tableColumns.length > 0 && /SELECT\s+\*/i.test(sql)) {
+        const columnsStr = tableColumns.map(col => `\`${col}\``).join(', ');
+        paginatedSql = sql.replace(/SELECT\s+\*/i, `SELECT ${columnsStr}`);
+      }
+      
+      paginatedSql = `SELECT * FROM (${paginatedSql}) AS dataQuery ORDER BY id LIMIT ${pageSize} OFFSET ${offset}`;
+      
+      try {
+        const data = await executeGoldSchemaQuery(paginatedSql);
         
         // Calculate total pages
         const totalPages = Math.ceil(total / pageSize);
@@ -492,56 +678,52 @@ exports.getTableDataWithSegment = async (req, res) => {
             }
           }
         });
-      } catch (error) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid segment configuration',
-          error: error.message
-        });
-      }
-    }
-    
-    // If we have direct SQL (custom or generated), execute it with pagination
-    try {
-      // For direct SQL, we need to modify it to support pagination
-      // This is a simplified approach and might need adjustments based on your SQL dialect
-      
-      // Count total rows
-      const countSql = `SELECT COUNT(*) AS total FROM (${sql}) AS countQuery`;
-      const countResult = await executeGoldSchemaQuery(countSql);
-      const total = countResult[0].total;
-      
-      // Apply pagination to the SQL
-      const paginatedSql = `SELECT * FROM (${sql}) AS dataQuery ORDER BY id LIMIT ${pageSize} OFFSET ${offset}`;
-      const data = await executeGoldSchemaQuery(paginatedSql);
-      
-      // Calculate total pages
-      const totalPages = Math.ceil(total / pageSize);
-      
-      // Update last executed timestamp
-      await executeAppSchemaQuery(`
-        UPDATE segments
-        SET last_executed = CURRENT_TIMESTAMP(),
-            updated_at = CURRENT_TIMESTAMP()
-        WHERE segment_id = ${escapeSQLString(segmentId)}
-      `);
-      
-      return res.status(200).json({
-        success: true,
-        data: {
-          rows: data,
-          segment: {
-            segment_id: segment.segment_id,
-            segment_name: segment.segment_name
-          },
-          pagination: {
-            total,
-            page,
-            pageSize,
-            totalPages
-          }
+      } catch (paginatedError) {
+        console.error('Error executing paginated segment SQL:', paginatedError);
+        
+        // Fallback: try with fewer columns
+        if (tableColumns.length > 0) {
+          console.log('Attempting fallback query with limited columns...');
+          
+          // Get first 10 columns only to reduce chance of errors
+          const safeColumns = tableColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
+          const fallbackSql = `SELECT ${safeColumns} FROM (${sql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
+          
+          console.log('Executing fallback SQL:', fallbackSql);
+          const fallbackData = await executeGoldSchemaQuery(fallbackSql);
+          
+          // Calculate total pages
+          const totalPages = Math.ceil(total / pageSize);
+          
+          // Update last executed timestamp
+          await executeAppSchemaQuery(`
+            UPDATE segments
+            SET last_executed = CURRENT_TIMESTAMP(),
+                updated_at = CURRENT_TIMESTAMP()
+            WHERE segment_id = ${escapeSQLString(segmentId)}
+          `);
+          
+          return res.status(200).json({
+            success: true,
+            data: {
+              rows: fallbackData,
+              segment: {
+                segment_id: segment.segment_id,
+                segment_name: segment.segment_name
+              },
+              pagination: {
+                total,
+                page,
+                pageSize,
+                totalPages
+              },
+              limited_columns: true
+            }
+          });
+        } else {
+          throw paginatedError;
         }
-      });
+      }
     } catch (error) {
       return res.status(400).json({
         success: false,
@@ -603,20 +785,51 @@ exports.getTableMetadata = async (req, res) => {
       quotedTableName = `\`${tableName}\``;
     }
     
-    // Query to get column information
-    // This SQL is for Databricks - you may need to adjust for your specific database
-    const query = `DESCRIBE TABLE ${quotedTableName}`;
-    
-    console.log('Executing query:', query);
-    const columns = await executeGoldSchemaQuery(query);
-    
-    return res.status(200).json({
-      success: true,
-      data: {
-        tableName,
-        columns
+    // Try different approaches to get table metadata
+    let columns = [];
+    let error = null;
+
+    // First attempt: Standard DESCRIBE TABLE query
+    try {
+      const query = `DESCRIBE TABLE ${quotedTableName}`;
+      console.log('Executing query:', query);
+      columns = await executeGoldSchemaQuery(query);
+    } catch (err) {
+      console.error('Error with DESCRIBE TABLE:', err);
+      error = err;
+      
+      // Second attempt: Try with a sample query
+      try {
+        console.log('Attempting alternative metadata retrieval...');
+        const sampleQuery = `SELECT * FROM ${quotedTableName} LIMIT 1`;
+        const sampleData = await executeGoldSchemaQuery(sampleQuery);
+        
+        if (sampleData && sampleData.length > 0) {
+          // Create metadata from sample row
+          columns = Object.keys(sampleData[0]).map(column => ({
+            col_name: column,
+            data_type: typeof sampleData[0][column]
+          }));
+        }
+      } catch (altErr) {
+        console.error('Alternative method also failed:', altErr);
+        // Continue with original error
       }
-    });
+    }
+    
+    // If we have columns data, return it
+    if (columns && columns.length > 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          tableName,
+          columns
+        }
+      });
+    }
+    
+    // If all attempts failed
+    throw error || new Error('Failed to retrieve table metadata through all methods');
   } catch (error) {
     console.error('Error fetching table metadata:', error);
     return res.status(500).json({
