@@ -43,7 +43,7 @@ exports.refreshToken = async (req, res) => {
     } else {
       res.cookie('refreshtoken', newRefreshToken, {
         httpOnly: false,
-        secure: true,
+        secure: false,
         sameSite: process.env.SAME_SITE || "None",
         domain: process.env.COOKIE_DOMAIN,
         path: '/',
