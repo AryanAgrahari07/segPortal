@@ -510,7 +510,7 @@ export default function TableDetailPage() {
 
       // Load table metadata
       try {
-        const response = await dataService.getTableMetadata(tableName) as any;
+        const response = await dataService.getTableMetadata(tableName, segmentId) as any;
         // console.log("Table metadata response:", response);
         
         // Extract columns from the response
@@ -620,9 +620,13 @@ export default function TableDetailPage() {
                 group.filters?.map((filter: any) => ({
                   id: filter.id || `filter-${Date.now()}-${Math.random()}`,
                   column: filter.column_name || "",
-                  operator: filter.filter_operator || "=",
-                  value: filter.filter_value || "",
-                  value2: filter.filter_value_2 || "",
+                  operator: mapOperatorFromBackend(filter.filter_operator) || "=",
+                  value: Array.isArray(filter.filter_value) && filter.filter_value.length > 0 
+                    ? filter.filter_value[0] 
+                    : filter.filter_value || "",
+                  value2: Array.isArray(filter.filter_value) && filter.filter_value.length > 1
+                    ? filter.filter_value[1]
+                    : filter.filter_value_2 || "",
                 })) || [],
             }));
 
@@ -673,7 +677,8 @@ export default function TableDetailPage() {
                 groupConditions: segment.groupConditions && Array.isArray(segment.groupConditions) ? 
                   segment.groupConditions : ['AND'],
                 page: pagination.page,
-                pageSize: pagination.pageSize
+                pageSize: pagination.pageSize,
+                segmentId: segmentId || undefined // Pass segmentId to the backend
               };
               
               // console.log("Sending filter data to load table data:", filterQueryData);
@@ -1143,7 +1148,8 @@ export default function TableDetailPage() {
           customSql,
           filterGroups: [],
           page: 1, // Always use page 1 when executing a new query
-          pageSize: pagination.pageSize
+          pageSize: pagination.pageSize,
+          segmentId: segmentId || undefined // Pass segmentId when using custom SQL
         });
         
         // Handle response
@@ -1222,7 +1228,8 @@ export default function TableDetailPage() {
           // Add the between-group conditions as an array
           groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
           page: 1, // Always use page 1 when executing a new query
-          pageSize: pagination.pageSize
+          pageSize: pagination.pageSize,
+          segmentId: segmentId || undefined // Pass segmentId when executing filters
         };
         
         // console.log("Executing query with filters:", filterQueryData);
@@ -1413,6 +1420,31 @@ export default function TableDetailPage() {
       'NOT_BETWEEN': 'notBetween',
       'IS NULL': 'isNull',
       'IS NOT NULL': 'isNotNull'
+    }
+    return operatorMap[operator] || operator
+  }
+
+  // Add a reverse mapping function to convert backend operator formats to frontend formats
+  const mapOperatorFromBackend = (operator: string): string => {
+    const operatorMap: { [key: string]: string } = {
+      'equals': '=',
+      'notEquals': '!=',
+      'contains': 'LIKE',
+      'notContains': 'NOT LIKE',
+      'startsWith': 'STARTS_WITH',
+      'notStartsWith': 'NOT_STARTS_WITH',
+      'endsWith': 'ENDS_WITH',
+      'notEndsWith': 'NOT_ENDS_WITH',
+      'greaterThan': '>',
+      'greaterThanOrEqual': '>=',
+      'lessThan': '<',
+      'lessThanOrEqual': '<=',
+      'in': 'IN',
+      'notIn': 'NOT_IN',
+      'between': 'BETWEEN',
+      'notBetween': 'NOT_BETWEEN',
+      'isNull': 'IS NULL',
+      'isNotNull': 'IS NOT NULL'
     }
     return operatorMap[operator] || operator
   }
@@ -1817,10 +1849,10 @@ export default function TableDetailPage() {
                 <TooltipTrigger asChild>
                   <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-white dark:text-white" onClick={() => setShowSaveDialog(true)}>
                     <Save className="h-3.5 w-3.5 mr-1.5" />
-                    Save Segment
+                    {segmentId ? "Update Segment" : "Save Segment"}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Save current configuration as a segment</TooltipContent>
+                <TooltipContent>{segmentId ? "Update existing segment" : "Save current configuration as a segment"}</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -2088,10 +2120,10 @@ export default function TableDetailPage() {
                   <div className="h-7 w-7 rounded-md bg-secondary/10 flex items-center justify-center mr-2">
                     <Save className="h-4 w-4 text-secondary" />
                   </div>
-                  Save Segment
+                  {segmentId ? "Update Segment" : "Save Segment"}
                 </DialogTitle>
                 <DialogDescription>
-                  Give your segment a name and description to save it for future use.
+                  Give your segment a name and description to {segmentId ? "update" : "save"} it for future use.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -2147,7 +2179,7 @@ export default function TableDetailPage() {
                   Cancel
                 </Button>
                 <Button onClick={saveSegment} disabled={saving} className="bg-primary hover:bg-primary/90 text-white dark:text-white">
-                  {saving ? "Saving..." : "Save Segment"}
+                  {saving ? (segmentId ? "Updating..." : "Saving...") : segmentId ? "Update Segment" : "Save Segment"}
                 </Button>
               </DialogFooter>
             </DialogContent>

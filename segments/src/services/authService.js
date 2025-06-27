@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const { executeQuery, executeAppSchemaQuery } = require('../database/database');
+const { executeAppSchemaQuery } = require('../database/database');
 
 // Helper function to escape SQL string values
 const escapeSQLString = (str) => {
@@ -18,7 +18,7 @@ class AuthService {
         full_name: user.full_name,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '2m' } // 30m expiry balancing security and user experience
+      { expiresIn: '30m' } // 30m expiry balancing security and user experience
     );
   }
 
@@ -88,8 +88,16 @@ class AuthService {
   // Validate refresh token and return session info
   async validateRefreshToken(token) {
     try {
-      // Verify token signature
-      jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+      // Verify token signature and get decoded token
+      const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+      
+      // Log token details for debugging
+      console.log('Token verification successful, decoded token:', {
+        tokenId: decoded.token_id,
+        exp: decoded.exp,
+        expDate: new Date(decoded.exp * 1000).toISOString(),
+        currentTime: new Date().toISOString()
+      });
 
       // Check if token exists and is active in database
       const query = `
@@ -104,12 +112,28 @@ class AuthService {
       const result = await executeAppSchemaQuery(query);
 
       if (!result || result.length === 0) {
+
+        // Clear cookies
+        res.clearCookie('refreshtoken');
+        res.clearCookie('sessionid');
+
+        console.log('Token not found in database or expired in DB. Current time:', new Date().toISOString());
         throw new Error('Invalid refresh token');
       }
 
       return result[0];
     } catch (error) {
+
+      // Clear cookies
+      res.clearCookie('refreshtoken');
+      res.clearCookie('sessionid');
+
       console.error('Validate refresh token error:', error);
+      // If token is expired, provide more specific error
+      if (error.name === 'TokenExpiredError') {
+        console.error('Token expired. Expiry date:', new Date(error.expiredAt).toISOString(), 'Current time:', new Date().toISOString());
+        throw error; // Preserve the original error for better debugging
+      }
       throw new Error('Invalid refresh token');
     }
   }

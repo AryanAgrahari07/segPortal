@@ -50,7 +50,17 @@ exports.verifyOTP = async (req, res) => {
         WHERE email = ${escapeSQLString(sanitizedEmail)}
       `;
 
-      const userResult = await executeAppSchemaQuery(userQuery);
+      let userResult;
+      try {
+        userResult = await executeAppSchemaQuery(userQuery);
+      } catch (dbError) {
+        console.error('Database error checking user:', dbError);
+        return res.status(503).json({
+          success: false,
+          message: 'Database service unavailable, please try again later',
+          error: 'database_error'
+        });
+      }
 
       if (!userResult || userResult.length === 0) {
         return res.status(404).json({
@@ -77,7 +87,17 @@ exports.verifyOTP = async (req, res) => {
       AND expires_at >= CURRENT_TIMESTAMP()
     `;
 
-    const result = await executeAppSchemaQuery(getOtpQuery);
+    let result;
+    try {
+      result = await executeAppSchemaQuery(getOtpQuery);
+    } catch (otpQueryError) {
+      console.error('Error fetching OTP data:', otpQueryError);
+      return res.status(503).json({
+        success: false,
+        message: 'Unable to verify OTP at this time, please try again later',
+        error: 'database_error'
+      });
+    }
 
     if (result && result.length > 0) {
       const storedHashedOTP = result[0].OTP;
@@ -120,13 +140,17 @@ exports.verifyOTP = async (req, res) => {
           device: parser.getDevice(),
         };
 
-        const query = `
-          UPDATE user_sessions 
-          SET is_active = false 
-          WHERE user_id = ${escapeSQLString(user.user_id)}
-        `;
-        await executeAppSchemaQuery(query);
-
+        try {
+          const query = `
+            UPDATE user_sessions 
+            SET is_active = false 
+            WHERE user_id = ${escapeSQLString(user.user_id)}
+          `;
+          await executeAppSchemaQuery(query);
+        } catch (sessionError) {
+          console.error('Error updating existing sessions:', sessionError);
+          // Continue despite this error
+        }
 
         // Generate tokens
         const accessToken = authService.generateAccessToken(user);
@@ -148,21 +172,6 @@ exports.verifyOTP = async (req, res) => {
         `;
         await executeAppSchemaQuery(otpquery);
         
-
-         // Determine redirect path based on role
-        //  let redirectPath = "/dashboard";
-
-        //  switch (user.role.toLowerCase()) {
-        //    case "admin":
-        //      redirectPath = "/admin";
-        //      break;
-        //    case "user":
-        //      redirectPath = "/dashboard";
-        //      break;
-        //    default:
-        //      redirectPath = "/dashboard";
-        //  }
-
 
         // Set cookies based on environment
         if (process.env.NODE_ENV === 'development') {
@@ -230,7 +239,17 @@ exports.verifyOTP = async (req, res) => {
         AND expires_at < CURRENT_TIMESTAMP()
       `;
 
-      const expiredResult = await executeAppSchemaQuery(checkExpiredQuery);
+      let expiredResult;
+      try {
+        expiredResult = await executeAppSchemaQuery(checkExpiredQuery);
+      } catch (expiredError) {
+        console.error('Error checking expired OTP:', expiredError);
+        return res.status(503).json({
+          success: false,
+          message: 'Unable to verify OTP status, please try again later',
+          error: 'database_error'
+        });
+      }
 
       if (expiredResult && expiredResult.length > 0) {
         return res.status(400).json({

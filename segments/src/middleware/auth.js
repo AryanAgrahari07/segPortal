@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 const {
-  executeQuery,
   executeAppSchemaQuery
 } = require("../database/database.js");
 
@@ -19,6 +18,10 @@ const verifyToken = async (req, res, next) => {
     console.log("sessionId is", sessionId);
    
     if (!token) {
+      // Clear cookies
+      res.clearCookie('refreshtoken');
+      res.clearCookie('sessionid');
+      
       return res.status(401).json({
         success: false,
         message: "No token provided",
@@ -40,6 +43,11 @@ const verifyToken = async (req, res, next) => {
 
       console.log("result is", result);
       if (result.length === 0 || !result[0].is_active) {
+
+        // Clear cookies
+        res.clearCookie('refreshtoken');
+        res.clearCookie('sessionid');
+
         return res.status(401).json({
           success: false,
           message: "Invalid session",
@@ -51,12 +59,22 @@ const verifyToken = async (req, res, next) => {
       next();
     } catch (err) {
       if (err.name === "TokenExpiredError") {
+
+        // Clear cookies
+        res.clearCookie('refreshtoken');
+        res.clearCookie('sessionid');
+        
         return res.status(401).json({
           success: false,
           message: "Token expired",
           code: "TOKEN_EXPIRED",
         });
       }
+
+      // Clear cookies
+      res.clearCookie('refreshtoken');
+      res.clearCookie('sessionid');
+      
       return res.status(401).json({
         success: false,
         message: "Invalid token",
@@ -64,6 +82,11 @@ const verifyToken = async (req, res, next) => {
     }
   } catch (error) {
     console.error("Auth middleware error:", error);
+    
+    // Clear cookies
+    res.clearCookie('refreshtoken');
+    res.clearCookie('sessionid');
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",

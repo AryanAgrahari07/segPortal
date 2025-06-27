@@ -17,6 +17,21 @@ interface TableMetadata {
   message?: string
 }
 
+// Column visibility interfaces
+interface ColumnVisibilityConfig {
+  table_name: string;
+  column_name: string;
+  is_visible: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+interface ColumnVisibilityResponse {
+  success: boolean;
+  data: ColumnVisibilityConfig[];
+  message?: string;
+}
+
 // interface Segment {
 //   segment_id: string
 //   segment_name: string
@@ -131,8 +146,9 @@ class DataService {
     return this.makeRequest("/tables")
   }
 
-  async getTableMetadata(tableName: string): Promise<TableMetadata> {
-    return this.makeRequest(`/table-metadata/${tableName}`)
+  async getTableMetadata(tableName: string, segmentId?: string | null): Promise<TableMetadata> {
+    const params = segmentId ? `?segmentId=${segmentId}` : '';
+    return this.makeRequest(`/table-metadata/${tableName}${params}`);
   }
 
   async getTableData(tableName: string, params?: {
@@ -142,7 +158,8 @@ class DataService {
     page?: number,
     pageSize?: number,
     sortColumn?: string,
-    sortOrder?: 'asc' | 'desc'
+    sortOrder?: 'asc' | 'desc',
+    segmentId?: string
   }) {
     return this.makeRequest(`/table-data/${tableName}`, {
       method: "POST",
@@ -276,6 +293,11 @@ class DataService {
       url += `&status=${status}`
     }
     return this.makeRequest(url)
+  }
+
+  async getDashboardSegments(): Promise<any> {
+    // This endpoint should return only the fields needed for the dashboard
+    return this.makeRequest('/get-segments-summary')
   }
 
   async getSegmentById(segmentId: string, include?: string[]): Promise<SegmentResponse> {
@@ -584,6 +606,28 @@ class DataService {
     return this.makeRequest(`/users/${userId}/role`, {
       method: "PUT",
       body: JSON.stringify({ role }),
+    })
+  }
+
+  // Column visibility methods
+  async getColumnVisibility(tableName: string): Promise<ColumnVisibilityResponse> {
+    return this.makeRequest(`/admin/column-visibility/${tableName}`)
+  }
+
+  async updateColumnVisibility(
+    tableName: string, 
+    configurations: Array<{ 
+      column_name: string;
+      is_visible: boolean;
+    }>,
+    updatedBy?: string
+  ) {
+    return this.makeRequest(`/admin/column-visibility/${tableName}`, {
+      method: "PUT",
+      body: JSON.stringify({ 
+        configurations,
+        updatedBy
+      }),
     })
   }
 }

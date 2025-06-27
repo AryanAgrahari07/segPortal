@@ -45,6 +45,18 @@ class AuthService {
     })
   }
 
+  async logout() {
+    try {
+      await this.makeRequest("/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+    } catch (error) {
+      console.error("Logout error:", error)
+      // Even if the server request fails, we still want to clear local state
+    }
+  }
+
   async checkToken(token: string) {
     return this.makeRequest("/check", {
       method: "GET",

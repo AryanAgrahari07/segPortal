@@ -84,7 +84,18 @@ exports.sendOTP = async (req, res) => {
     try {
         // Check if user exists
         const checkUserQuery = "SELECT user_id, email FROM users WHERE email = '" + sanitizedEmail + "'";
-        const userExists = await executeAppSchemaQuery(checkUserQuery);
+        
+        let userExists;
+        try {
+            userExists = await executeAppSchemaQuery(checkUserQuery);
+        } catch (dbError) {
+            console.error('Database error checking user:', dbError);
+            return res.status(503).json({
+                success: false,
+                message: 'Database service unavailable, please try again later',
+                error: 'database_error'
+            });
+        }
 
         if (userExists.length === 0) {
             return res.status(404).json({
@@ -103,16 +114,30 @@ exports.sendOTP = async (req, res) => {
         const hashedOTP = await bcrypt.hash(otp, saltRounds);
 
         // Delete any existing OTP for this email
-        const deleteQuery = `DELETE FROM OTP_tracker WHERE email = '${sanitizedEmail}' AND user_id = '${user_id}'`;
-        await executeAppSchemaQuery(deleteQuery);
+        try {
+            const deleteQuery = `DELETE FROM OTP_tracker WHERE email = '${sanitizedEmail}' AND user_id = '${user_id}'`;
+            await executeAppSchemaQuery(deleteQuery);
+        } catch (deleteError) {
+            console.error('Error deleting existing OTP:', deleteError);
+            // Continue execution even if delete fails
+        }
 
         // Insert new hashed OTP
-        const insertOtpQuery = `
-            INSERT INTO OTP_tracker (email, user_id, OTP, OTP_disable, created_at, updated_at, expires_at)
-            VALUES ('${sanitizedEmail}', '${user_id}', '${hashedOTP}', false, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP() + INTERVAL 60 SECOND)
-        `;
+        try {
+            const insertOtpQuery = `
+                INSERT INTO OTP_tracker (email, user_id, OTP, OTP_disable, created_at, updated_at, expires_at)
+                VALUES ('${sanitizedEmail}', '${user_id}', '${hashedOTP}', false, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP() + INTERVAL 60 SECOND)
+            `;
 
-        await executeAppSchemaQuery(insertOtpQuery);
+            await executeAppSchemaQuery(insertOtpQuery);
+        } catch (insertError) {
+            console.error('Error inserting OTP:', insertError);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to generate OTP',
+                error: 'database_error'
+            });
+        }
 
         // Send OTP via email
         try {

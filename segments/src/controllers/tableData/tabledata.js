@@ -1,4 +1,5 @@
-const { executeQuery, executeGoldSchemaQuery, executeAppSchemaQuery } = require('../../database/database.js');
+const { executeGoldSchemaQuery, executeAppSchemaQuery } = require('../../database/database.js');
+const { getVisibleColumns, getVisibleColumnsForSegment } = require('../admin/column_visibility.js');
 require('dotenv').config();
 
 // Helper function to escape SQL string values
@@ -133,12 +134,30 @@ exports.getTableData = async (req, res) => {
     console.log("Request body for table data:", req.body);
     
     // Get filter data from request body
-    const { filterGroups, groupConditions, customSql } = req.body;
+    const { filterGroups, groupConditions, customSql, segmentId } = req.body;
+    
+    // Ensure segmentId is valid
+    const validSegmentId = segmentId && segmentId !== 'null' && segmentId !== 'undefined' ? segmentId : undefined;
     
     // First, check if the table has an email column
     let emailColumnExists = false;
     let emailColumnName = '';
     let tableColumns = [];
+    let visibleColumns = [];
+    let columnsInFilters = new Set(); // Track columns used in filters
+    
+    // Extract column names from filter groups if they exist
+    if (filterGroups && Array.isArray(filterGroups)) {
+      filterGroups.forEach(group => {
+        if (group.filters && Array.isArray(group.filters)) {
+          group.filters.forEach(filter => {
+            if (filter.type === 'condition' && filter.column) {
+              columnsInFilters.add(filter.column);
+            }
+          });
+        }
+      });
+    }
     
     try {
       // Handle multi-part table names (catalog.schema.table)
@@ -162,6 +181,42 @@ exports.getTableData = async (req, res) => {
       
       // Store column names for later use
       tableColumns = columns.map(col => col.col_name || col.name || '');
+      
+      // Get visible columns based on column visibility configuration
+      try {
+        // If request includes segmentId, use getVisibleColumnsForSegment
+        const segmentIdParam = req.query?.segmentId || req.body?.segmentId;
+        if (segmentIdParam && segmentIdParam !== 'null' && segmentIdParam !== 'undefined') {
+          visibleColumns = await getVisibleColumnsForSegment(tableName, segmentIdParam);
+          console.log(`Visible columns for ${tableName} with segment ${segmentIdParam}:`, visibleColumns);
+        } else if (validSegmentId) {
+          visibleColumns = await getVisibleColumnsForSegment(tableName, validSegmentId);
+          console.log(`Visible columns for ${tableName} with segment ${validSegmentId}:`, visibleColumns);
+        } else {
+          visibleColumns = await getVisibleColumns(tableName);
+          console.log(`Visible columns for ${tableName}:`, visibleColumns);
+        }
+      } catch (visibilityError) {
+        console.error('Error getting visible columns:', visibilityError);
+        // If there's an error getting visible columns, show all columns
+        visibleColumns = [...tableColumns];
+      }
+      
+      // If no visibility configurations exist or all columns are visible by default,
+      // all columns should be visible
+      if (!visibleColumns || visibleColumns.length === 0) {
+        visibleColumns = [...tableColumns];
+      }
+      
+      // Add columns used in filters to visible columns if they are currently hidden
+      // This ensures columns used in segment filters are visible regardless of their visibility setting
+      if (columnsInFilters.size > 0) {
+        const combinedVisibleColumns = new Set(visibleColumns);
+        columnsInFilters.forEach(column => {
+          combinedVisibleColumns.add(column);
+        });
+        visibleColumns = Array.from(combinedVisibleColumns);
+      }
       
       // Look for column names that likely contain email data
       const emailColumnPattern = /email|e_mail|mail|email_address/i;
@@ -231,13 +286,14 @@ exports.getTableData = async (req, res) => {
       }
     }
     
-    // Use specific columns instead of '*' to avoid column mismatch errors
-    const columnsToSelect = tableColumns.length > 0 ? tableColumns.map(col => `\`${col}\``).join(', ') : '*';
+    // Use specific visible columns instead of '*' to avoid column mismatch errors and respect visibility settings
+    const columnsToSelect = visibleColumns.length > 0 ? visibleColumns.map(col => `\`${col}\``).join(', ') : '*';
     
-    // Build the base SQL query with specific columns
+    // Build the base SQL query with visible columns
     let countQuery = `SELECT COUNT(*) AS total FROM ${tableName}`;
     let dataQuery = `SELECT ${columnsToSelect} FROM ${tableName}`;
-    let uniqueEmailQuery = emailColumnExists ? `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM ${tableName}` : null;
+    let uniqueEmailQuery = emailColumnExists && visibleColumns.includes(emailColumnName) ? 
+      `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM ${tableName}` : null;
     
     // Apply filters if provided
     if (filterGroups && Array.isArray(filterGroups) && filterGroups.length > 0) {
@@ -344,12 +400,12 @@ exports.getTableData = async (req, res) => {
       console.error('Error executing data query:', error);
       
       // Fallback: If error occurs with all columns, try with a subset of safe columns
-      if (tableColumns.length > 0) {
+      if (visibleColumns.length > 0) {
         try {
           console.log('Attempting fallback query with limited columns...');
           
-          // Get first 10 columns only to reduce chance of errors
-          const safeColumns = tableColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
+          // Get first 10 visible columns only to reduce chance of errors
+          const safeColumns = visibleColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
           const fallbackQuery = `SELECT ${safeColumns} FROM ${tableName} LIMIT ${pageSize} OFFSET ${offset}`;
           
           console.log('Executing fallback query:', fallbackQuery);
@@ -410,15 +466,21 @@ exports.getTableDataWithSegment = async (req, res) => {
       });
     }
     
-    if (!segmentId) {
+    if (!segmentId || segmentId === 'null' || segmentId === 'undefined') {
       return res.status(400).json({
         success: false,
         message: 'Segment ID is required'
       });
     }
     
+    // Ensure segmentId is valid
+    const validSegmentId = segmentId;
+    
     // Get table columns to avoid column mismatch errors
     let tableColumns = [];
+    let visibleColumns = [];
+    let columnsInFilters = new Set(); // Track columns used in filters
+    
     try {
       // Handle multi-part table names (catalog.schema.table)
       const parts = tableName.split('.');
@@ -441,13 +503,68 @@ exports.getTableDataWithSegment = async (req, res) => {
       
       // Store column names for later use
       tableColumns = columns.map(col => col.col_name || col.name || '');
+      
+      // Get segment data to extract columns used in filters
+      const segmentQuery = `SELECT * FROM segments WHERE segment_id = ${escapeSQLString(validSegmentId)}`;
+      const segmentResult = await executeAppSchemaQuery(segmentQuery);
+      
+      if (!segmentResult || segmentResult.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Segment not found'
+        });
+      }
+      
+      // Get filter groups data with their conditions
+      const filterGroupsQuery = `SELECT * FROM filter_groups WHERE segment_id = ${escapeSQLString(validSegmentId)} ORDER BY group_order`;
+      const filterGroupsResult = await executeAppSchemaQuery(filterGroupsQuery);
+      
+      // Get all filters to extract columns
+      if (filterGroupsResult && filterGroupsResult.length > 0) {
+        for (const group of filterGroupsResult) {
+          const filtersQuery = `SELECT * FROM filters WHERE filter_group_id = ${escapeSQLString(group.id)}`;
+          const filtersResult = await executeAppSchemaQuery(filtersQuery);
+          
+          if (filtersResult && filtersResult.length > 0) {
+            filtersResult.forEach(filter => {
+              if (filter.column_name) {
+                columnsInFilters.add(filter.column_name);
+              }
+            });
+          }
+        }
+      }
+      
+      // Get visible columns based on column visibility configuration
+      try {
+        // Use getVisibleColumnsForSegment to include columns used in filters
+        visibleColumns = await getVisibleColumnsForSegment(tableName, validSegmentId);
+        console.log(`Visible columns for ${tableName} with segment ${validSegmentId}:`, visibleColumns);
+      } catch (visibilityError) {
+        console.error('Error getting visible columns:', visibilityError);
+        // If there's an error getting visible columns, show all columns
+        visibleColumns = [...tableColumns];
+      }
+      
+      // If no visibility configurations exist or all columns are visible by default,
+      if (!visibleColumns || visibleColumns.length === 0) {
+        visibleColumns = [...tableColumns];
+      }
+      
+      // Add columns used in filters to visible columns if they are currently hidden
+      if (columnsInFilters.size > 0) {
+        const combinedVisibleColumns = new Set(visibleColumns);
+        columnsInFilters.forEach(column => {
+          combinedVisibleColumns.add(column);
+        });
+        visibleColumns = Array.from(combinedVisibleColumns);
+      }
     } catch (error) {
       console.error('Error checking table columns:', error);
-      // Continue with the request even if we can't determine the columns
     }
     
-    // Use specific columns instead of '*' to avoid column mismatch errors
-    const columnsToSelect = tableColumns.length > 0 ? tableColumns.map(col => `\`${col}\``).join(', ') : '*';
+    // Use specific visible columns instead of '*' to avoid column mismatch errors and respect visibility settings
+    const columnsToSelect = visibleColumns.length > 0 ? visibleColumns.map(col => `\`${col}\``).join(', ') : '*';
     
     // Get segment data
     const segmentQuery = `SELECT * FROM segments WHERE segment_id = ${escapeSQLString(segmentId)}`;
@@ -577,11 +694,11 @@ exports.getTableDataWithSegment = async (req, res) => {
           console.error('Error executing segment data query:', dataError);
           
           // Fallback: If error occurs with all columns, try with a subset of safe columns
-          if (tableColumns.length > 0) {
+          if (visibleColumns.length > 0) {
             console.log('Attempting fallback query with limited columns...');
             
-            // Get first 10 columns only to reduce chance of errors
-            const safeColumns = tableColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
+            // Get first 10 visible columns only to reduce chance of errors
+            const safeColumns = visibleColumns.slice(0, 10).map(col => `\`${col}\``).join(', ');
             const fallbackQuery = `SELECT ${safeColumns} FROM ${tableName}${whereClause ? whereClause : ''} LIMIT ${pageSize} OFFSET ${offset}`;
             
             console.log('Executing fallback query:', fallbackQuery);
@@ -659,7 +776,7 @@ exports.getTableDataWithSegment = async (req, res) => {
           UPDATE segments
           SET last_executed = CURRENT_TIMESTAMP(),
               updated_at = CURRENT_TIMESTAMP()
-          WHERE segment_id = ${escapeSQLString(segmentId)}
+          WHERE segment_id = ${escapeSQLString(validSegmentId)}
         `);
         
         return res.status(200).json({
@@ -786,14 +903,51 @@ exports.getTableMetadata = async (req, res) => {
     }
     
     // Try different approaches to get table metadata
-    let columns = [];
+    let allColumns = [];
+    let visibleColumns = [];
     let error = null;
 
     // First attempt: Standard DESCRIBE TABLE query
     try {
       const query = `DESCRIBE TABLE ${quotedTableName}`;
       console.log('Executing query:', query);
-      columns = await executeGoldSchemaQuery(query);
+      allColumns = await executeGoldSchemaQuery(query);
+      const validSegmentId = req.query?.segmentId || req.body?.segmentId;
+      // Get visible columns based on column visibility configuration
+      try {
+        // If request includes segmentId, use getVisibleColumnsForSegment
+        const segmentIdParam = req.query?.segmentId || req.body?.segmentId;
+        if (segmentIdParam && segmentIdParam !== 'null' && segmentIdParam !== 'undefined') {
+          visibleColumns = await getVisibleColumnsForSegment(tableName, segmentIdParam);
+          console.log(`Visible columns for ${tableName} with segment ${segmentIdParam} metadata:`, visibleColumns);
+        } else if (validSegmentId) {
+          visibleColumns = await getVisibleColumnsForSegment(tableName, validSegmentId);
+          console.log(`Visible columns for ${tableName} with segment ${validSegmentId} metadata:`, visibleColumns);
+        } else {
+          visibleColumns = await getVisibleColumns(tableName);
+          console.log(`Visible columns for ${tableName} metadata:`, visibleColumns);
+        }
+      } catch (visibilityError) {
+        console.error('Error getting visible columns:', visibilityError);
+        // If there's an error getting visible columns, show all columns
+        visibleColumns = allColumns.map(col => col.col_name || col.name || '');
+      }
+      
+      // If no visibility configurations exist or all columns are visible by default,
+      // all columns should be visible
+      if (!visibleColumns || visibleColumns.length === 0) {
+        visibleColumns = allColumns.map(col => col.col_name || col.name || '');
+      }
+      
+      // Filter columns based on visibility
+      const columnNames = allColumns.map(col => col.col_name || col.name || '');
+      const filteredColumns = allColumns.filter(col => {
+        const colName = col.col_name || col.name || '';
+        return visibleColumns.includes(colName);
+      });
+      
+      // Use filtered columns instead of all columns
+      allColumns = filteredColumns;
     } catch (err) {
       console.error('Error with DESCRIBE TABLE:', err);
       error = err;
@@ -805,8 +959,42 @@ exports.getTableMetadata = async (req, res) => {
         const sampleData = await executeGoldSchemaQuery(sampleQuery);
         
         if (sampleData && sampleData.length > 0) {
-          // Create metadata from sample row
-          columns = Object.keys(sampleData[0]).map(column => ({
+          // Get all column names from sample data
+          const columnNames = Object.keys(sampleData[0]);
+          
+          // Get visible columns based on column visibility configuration
+          try {
+            // If request includes segmentId, use getVisibleColumnsForSegment
+            const segmentIdParam = req.query?.segmentId || req.body?.segmentId;
+            if (segmentIdParam && segmentIdParam !== 'null' && segmentIdParam !== 'undefined') {
+              visibleColumns = await getVisibleColumnsForSegment(tableName, segmentIdParam);
+              console.log(`Visible columns for ${tableName} with segment ${segmentIdParam} from sample:`, visibleColumns);
+            } else if (validSegmentId) {
+              visibleColumns = await getVisibleColumnsForSegment(tableName, validSegmentId);
+              console.log(`Visible columns for ${tableName} with segment ${validSegmentId} from sample:`, visibleColumns);
+            } else {
+              visibleColumns = await getVisibleColumns(tableName);
+              console.log(`Visible columns for ${tableName} from sample:`, visibleColumns);
+            }
+          } catch (visibilityError) {
+            console.error('Error getting visible columns:', visibilityError);
+            // If there's an error getting visible columns, show all columns
+            visibleColumns = columnNames;
+          }
+          
+          // If no visibility configurations exist or all columns are visible by default,
+          // all columns should be visible
+          if (!visibleColumns || visibleColumns.length === 0) {
+            visibleColumns = columnNames;
+          }
+          
+          // Filter column names based on visibility
+          const filteredColumnNames = columnNames.filter(colName => 
+            visibleColumns.includes(colName)
+          );
+          
+          // Create metadata from filtered columns
+          allColumns = filteredColumnNames.map(column => ({
             col_name: column,
             data_type: typeof sampleData[0][column]
           }));
@@ -818,12 +1006,12 @@ exports.getTableMetadata = async (req, res) => {
     }
     
     // If we have columns data, return it
-    if (columns && columns.length > 0) {
+    if (allColumns && allColumns.length > 0) {
       return res.status(200).json({
         success: true,
         data: {
           tableName,
-          columns
+          columns: allColumns
         }
       });
     }

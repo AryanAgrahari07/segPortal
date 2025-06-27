@@ -3,8 +3,8 @@ const { DBSQLClient } = require("@databricks/sql");
 
 // ===== Configuration ===
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
-const QUERY_TIMEOUT_MS = 30000; // 30 seconds
+const RETRY_DELAY_MS = 2000;
+const QUERY_TIMEOUT_MS = 60000; // 60 seconds
 
 // ==== Connection Manager ====
 class DatabricksSQLManager {

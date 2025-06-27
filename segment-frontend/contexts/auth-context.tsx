@@ -178,13 +178,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    setUser(null)
-    setToken(null)
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
-    // Clear cookies
-    authService.clearCookies();
-    window.location.href = "/login"
+    // Call the backend logout endpoint first
+    authService.logout().finally(() => {
+      // Then clear local state
+      setUser(null)
+      setToken(null)
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
+      // Clear cookies
+      authService.clearCookies();
+      window.location.href = "/login"
+    })
   }
 
   return <AuthContext.Provider value={{ user, token, loading, login, logout }}>{children}</AuthContext.Provider>

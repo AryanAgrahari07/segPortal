@@ -62,6 +62,39 @@ exports.getAllSegments = async (req, res) => {
   }
 };
 
+// Get only the segment summary data needed for dashboard display
+exports.getSegmentsSummary = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        segment_id, 
+        segment_name, 
+        description, 
+        created_by, 
+        status, 
+        created_at, 
+        last_executed
+      FROM segments
+      WHERE is_active = TRUE
+      ORDER BY created_at DESC
+    `;
+
+    const results = await executeAppSchemaQuery(query);
+
+    return res.status(200).json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    console.error('Error fetching segments summary:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch segments summary',
+      error: error.message
+    });
+  }
+};
+
 exports.createSegment = async (req, res) => {
   try {
     const segmentData = req.body;

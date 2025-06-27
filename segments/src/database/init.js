@@ -1,4 +1,4 @@
-const { executeQuery, executeAppSchemaQuery, executeGoldSchemaQuery } = require('./database');
+const { executeAppSchemaQuery, executeGoldSchemaQuery } = require('./database');
 require('dotenv').config();
 
 class DatabaseInitializer {

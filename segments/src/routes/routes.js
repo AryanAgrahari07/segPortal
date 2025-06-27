@@ -6,32 +6,35 @@ const { sanitizeInput } = require("../middleware/security.js");
 const { verifyToken } = require("../middleware/auth.js");
 const { refreshToken } = require("../controllers/refreshToken/refreshToken.js");
 const { getAllTables } = require("../controllers/allTables/tables.js");
-const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted, toggleSegmentStatus } = require("../controllers/segments/segment.js");
-const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole } = require("../controllers/addUser/adduser.js");
+const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted, toggleSegmentStatus, getSegmentsSummary } = require("../controllers/segments/segment.js");
+const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole, logout } = require("../controllers/addUser/adduser.js");
 const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
-
+const { getColumnVisibility, updateColumnVisibility } = require("../controllers/admin/column_visibility.js");
 
 const filterGroupsController = require("../controllers/segments/filter_groups");
 const filtersController = require("../controllers/segments/filters");
 
 // otp
-router.post("/send-otp", sanitizeInput, sendOTP);               ///
-router.post("/verify-otp", sanitizeInput, verifyOTP);           ///
+router.post("/send-otp", sanitizeInput, sendOTP);               
+router.post("/verify-otp", sanitizeInput, verifyOTP);           
 
 // refresh token
 router.post("/refresh-token", sanitizeInput, refreshToken);      
 
+// logout
+router.post("/logout", sanitizeInput, logout);
 
 // tables -list of all the tables in the database
-router.get("/tables",verifyToken, getAllTables);                            ///
-router.get("/table-metadata/:tableName", verifyToken, getTableMetadata);     ///          
-router.post("/table-data/:tableName", verifyToken, getTableData);            ///             
+router.get("/tables",verifyToken, getAllTables);                            
+router.get("/table-metadata/:tableName", verifyToken, getTableMetadata);              
+router.post("/table-data/:tableName", verifyToken, getTableData);                        
 router.get("/table-data-with-segment/:tableName/:segmentId", verifyToken, getTableDataWithSegment);
 
 // segments
-router.get("/get-segments", verifyToken, getAllSegments);                   ///
-router.get("/segments/:segmentId", verifyToken, getSegmentById);            ///
-router.post("/create-segment", verifyToken, createSegment);                 ///
+router.get("/get-segments", verifyToken, getAllSegments);                   
+router.get("/segments/:segmentId", verifyToken, getSegmentById);   
+router.get("/get-segments-summary", verifyToken, getSegmentsSummary);         
+router.post("/create-segment", verifyToken, createSegment);                 
 router.put("/update-segment/:segmentId", verifyToken, updateSegment);
 router.delete("/delete-segment/:segmentId", verifyToken, deleteSegment);
 router.put('/:segmentId/executed', verifyToken, updateLastExecuted);
@@ -54,9 +57,13 @@ router.delete('/filters/:filterId', verifyToken, filtersController.deleteFilter)
 
 // users
 router.post("/add-user", verifyToken, addUser);        
-router.get("/get-users", verifyToken, getAllUsers);                  ///
+router.get("/get-users", verifyToken, getAllUsers);                 
 router.put("/users/:userId/status", verifyToken, updateUserStatus);
 router.put("/users/:userId/role",  verifyToken, updateUserRole); 
+
+// Column visibility routes
+router.get("/admin/column-visibility/:tableName", verifyToken, isAdmin, getColumnVisibility);
+router.put("/admin/column-visibility/:tableName", verifyToken, isAdmin, updateColumnVisibility);
  
 router.get("/check", verifyToken, sanitizeInput, (req, res) => {
     res.status(200).json({

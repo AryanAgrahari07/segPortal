@@ -103,45 +103,14 @@ export default function DashboardPage() {
         setTables([])
       }
 
-      // Load segments
+      // Load segments - using the optimized summary endpoint
       try {
-        const segmentsData = await dataService.getAllSegments()
-        // console.log("Segments API Response:", segmentsData)
-
-        // Check different possible segment data formats
-        if (segmentsData && Array.isArray(segmentsData.segments)) {
-          // console.log("Setting segments from segmentsData.segments:", segmentsData.segments)
-          setSegments(segmentsData.segments)
-        } else if (segmentsData && Array.isArray(segmentsData)) {
-          // console.log("Setting segments from direct array:", segmentsData)
-          setSegments(segmentsData)
-        } else if (segmentsData && (segmentsData as any).data && Array.isArray((segmentsData as any).data)) {
-          // console.log("Setting segments from segmentsData.data:", (segmentsData as any).data)
-          setSegments((segmentsData as any).data)
+        const segmentsData = await dataService.getDashboardSegments()
+        
+        if (segmentsData && segmentsData.success && Array.isArray(segmentsData.data)) {
+          setSegments(segmentsData.data)
         } else {
           console.error("No valid segments data structure found:", segmentsData)
-
-          // For development - create mock segments if none are available
-          const mockSegments = [
-            {
-              segment_id: "mock1",
-              segment_name: "Mock Segment 1",
-              description: "This is a mock segment for testing",
-              created_by: "Test User",
-              status: "active",
-              created_at: new Date().toISOString(),
-            },
-            {
-              segment_id: "mock2",
-              segment_name: "Mock Segment 2",
-              description: "Another mock segment for testing",
-              created_by: "Test User",
-              status: "active",
-              created_at: new Date().toISOString(),
-            },
-          ]
-          // console.log("Using mock segments:", mockSegments)
-          setSegments(mockSegments)
         }
       } catch (segmentError) {
         console.error("Error loading segments:", segmentError)

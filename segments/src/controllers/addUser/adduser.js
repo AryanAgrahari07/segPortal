@@ -1,6 +1,5 @@
-const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
+const { executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 // Helper function to escape SQL string values
@@ -318,6 +317,38 @@ exports.updateUserRole = async (req, res) => {
       success: false,
       message: 'Failed to update user role',
       error: error.message
+    });
+  }
+};
+
+// Logout user and invalidate session
+exports.logout = async (req, res) => {
+  try {
+    const sessionId = req.cookies.sessionid;
+
+    if (sessionId) {
+      // Invalidate the session in the database
+        const query = `
+          UPDATE user_sessions 
+          SET is_active = false 
+          WHERE session_id = ${escapeSQLString(sessionId)}
+        `;
+        await executeAppSchemaQuery(query);
+    }
+
+    // Clear cookies
+    res.clearCookie('refreshtoken');
+    res.clearCookie('sessionid');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during logout',
     });
   }
 };
