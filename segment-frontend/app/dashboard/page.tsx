@@ -52,6 +52,7 @@ export default function DashboardPage() {
   const [tables, setTables] = useState<Table[]>([])
   const [segments, setSegments] = useState<Segment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingTables, setLoadingTables] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [segmentsPagination, setSegmentsPagination] = useState<PaginationState>({ currentPage: 1, pageSize: 10 })
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -63,45 +64,25 @@ export default function DashboardPage() {
   const defaultTab = searchParams?.get("tab") || "segments"
 
   useEffect(() => {
-    loadData()
+    loadSegmentsData()
   }, [])
 
-  const loadData = async () => {
+  // Handle dialog open/close
+  const handleDialogOpenChange = (open: boolean) => {
+    setShowCreateDialog(open)
+    
+    // Reset selected table when dialog is closed
+    if (!open) {
+      setSelectedTable("")
+    } else {
+      // Load tables data when dialog is opened
+      loadTablesData()
+    }
+  }
+
+  const loadSegmentsData = async () => {
     try {
       setLoading(true)
-
-      // Load tables
-      try {
-        const tablesData = await dataService.getAllTables()
-        // console.log("Tables API Response:", tablesData)
-
-        if (Array.isArray(tablesData)) {
-          setTables(tablesData)
-        } else if (tablesData && Array.isArray(tablesData.data)) {
-          // Handle case where API returns { success: true, data: [...] }
-          setTables(tablesData.data)
-        } else {
-          console.error("Unexpected table data format:", tablesData)
-          setTables([])
-        }
-
-        if (tablesData && Array.isArray(tablesData.tables)) {
-          // console.log("Setting tables from tablesData.table:", tablesData.tables)
-          setTables(tablesData.tables)
-        } else if (tablesData && Array.isArray(tablesData)) {
-          // console.log("Setting segments from direct array:", tablesData)
-          setTables(tablesData)
-        } else if (tablesData && (tablesData as any).data && Array.isArray((tablesData as any).data)) {
-          const newLocal = "Setting tables from tablesData.data:"
-          // console.log(newLocal, (tablesData as any).data)
-          setTables((tablesData as any).data)
-        } else {
-          console.error("No valid tables data structure found:", tablesData)
-        }
-      } catch (tableError) {
-        console.error("Error loading tables:", tableError)
-        setTables([])
-      }
 
       // Load segments - using the optimized summary endpoint
       try {
@@ -119,11 +100,40 @@ export default function DashboardPage() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to load data",
+        description: error.message || "Failed to load segments data",
         variant: "destructive",
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadTablesData = async () => {
+    try {
+      setLoadingTables(true)
+
+      const tablesData = await dataService.getAllTables()
+
+      if (tablesData && Array.isArray(tablesData.tables)) {
+        setTables(tablesData.tables)
+      } else if (tablesData && Array.isArray(tablesData)) {
+        setTables(tablesData)
+      } else if (tablesData && (tablesData as any).data && Array.isArray((tablesData as any).data)) {
+        setTables((tablesData as any).data)
+      } else {
+        console.error("No valid tables data structure found:", tablesData)
+        setTables([])
+      }
+    } catch (tableError) {
+      console.error("Error loading tables:", tableError)
+      setTables([])
+      toast({
+        title: "Error",
+        description: "Failed to load tables data",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingTables(false)
     }
   }
 
@@ -311,7 +321,7 @@ export default function DashboardPage() {
                     <CardTitle>Segments</CardTitle>
                     <CardDescription className="mt-1.5">Manage your data segments and filters</CardDescription>
                   </div>
-                  <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1">
+                  <Button onClick={() => handleDialogOpenChange(true)} className="flex items-center gap-1">
                     <Plus className="h-4 w-4" />
                     Create Segment
                   </Button>
@@ -381,7 +391,7 @@ export default function DashboardPage() {
                 <p className="text-muted-foreground mb-4">
                   {searchTerm ? "Try adjusting your search terms." : "No segments have been created yet."}
                 </p>
-                <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-1">
+                <Button onClick={() => handleDialogOpenChange(true)} className="flex items-center gap-1">
                   <Plus className="h-4 w-4" />
                   Create Segment
                 </Button>
@@ -389,7 +399,7 @@ export default function DashboardPage() {
             )}
 
             {/* Create Segment Dialog */}
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <Dialog open={showCreateDialog} onOpenChange={handleDialogOpenChange}>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Create New Segment</DialogTitle>
@@ -402,28 +412,35 @@ export default function DashboardPage() {
                     <Label htmlFor="table-select" className="text-right">
                       Table
                     </Label>
-                    <Select
-                      value={selectedTable}
-                      onValueChange={setSelectedTable}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select a table" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[200px] overflow-y-auto">
-                        {tables.map((table) => (
-                          <SelectItem key={table.tableName} value={table.tableName}>
-                            {table.tableName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {loadingTables ? (
+                      <div className="col-span-3 flex items-center space-x-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm text-muted-foreground">Loading tables...</span>
+                      </div>
+                    ) : (
+                      <Select
+                        value={selectedTable}
+                        onValueChange={setSelectedTable}
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select a table" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[200px] overflow-y-auto">
+                          {tables.map((table) => (
+                            <SelectItem key={table.tableName} value={table.tableName}>
+                              {table.tableName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleCreateSegment}>
+                  <Button onClick={handleCreateSegment} disabled={loadingTables || !selectedTable}>
                     Continue
                   </Button>
                 </DialogFooter>

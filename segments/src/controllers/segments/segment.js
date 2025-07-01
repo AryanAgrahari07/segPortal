@@ -1,4 +1,4 @@
-const { executeQuery, executeAppSchemaQuery } = require('../../database/database.js');
+const { executeAppSchemaQuery } = require('../../database/database.js');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 

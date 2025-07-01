@@ -32,17 +32,6 @@ interface ColumnVisibilityResponse {
   message?: string;
 }
 
-// interface Segment {
-//   segment_id: string
-//   segment_name: string
-//   description?: string
-//   created_by: string
-//   status: string
-//   created_at: string
-//   last_executed?: string
-//   filter_groups?: FilterGroup[]
-// }
-
 interface SegmentResponse {
   success: boolean;
   data: SegmentData;
@@ -137,18 +126,18 @@ class DataService {
     return data
   }
 
-  // Tables
-  // async getAllTables() {
-  //   return this.makeRequest("/tables")
-  // }
-
   async getAllTables(): Promise<{ tables: table[] } | table[] | any> {
-    return this.makeRequest("/tables")
+    // Add a timestamp to prevent caching issues with schema context
+    const timestamp = new Date().getTime();
+    return this.makeRequest(`/tables?_=${timestamp}`);
   }
 
   async getTableMetadata(tableName: string, segmentId?: string | null): Promise<TableMetadata> {
-    const params = segmentId ? `?segmentId=${segmentId}` : '';
-    return this.makeRequest(`/table-metadata/${tableName}${params}`);
+    // Add a timestamp to prevent caching issues with schema context
+    const timestamp = new Date().getTime();
+    const baseParams = segmentId ? `segmentId=${segmentId}` : '';
+    const separator = baseParams ? '&' : '?';
+    return this.makeRequest(`/table-metadata/${tableName}${baseParams ? '?' + baseParams : ''}${separator}_=${timestamp}`);
   }
 
   async getTableData(tableName: string, params?: {
@@ -463,117 +452,9 @@ class DataService {
     })
   }
 
-  // async executeSegment(segmentId: string, options: { save_results: boolean }) {
-  //   try {
-  //     // console.log("Executing segment:", segmentId, options);
-  //     return this.makeRequest(`/segments/${segmentId}/execute`, {
-  //       method: "POST",
-  //       body: JSON.stringify(options),
-  //     });
-  //   } catch (error) {
-  //     console.error("Error executing segment:", error);
-  //     throw error;
-  //   }
-  // }
-
   async updateLastExecuted(segmentId: string) {
     return this.makeRequest(`/segments/${segmentId}/executed`, {
       method: "PUT",
-    })
-  }
-
-  // Filter Groups
-  async getFilterGroupsBySegmentId(segmentId: string): Promise<FilterGroup[]> {
-    return this.makeRequest(`/segments/${segmentId}/filter-groups`)
-  }
-
-  async createFilterGroup(filterGroupData: {
-    segment_id: string
-    group_name: string
-    group_order: number
-    group_condition: "AND" | "OR"
-    description?: string
-  }) {
-    return this.makeRequest(`/segments/${filterGroupData.segment_id}/filter-groups`, {
-      method: "POST",
-      body: JSON.stringify({
-        group_name: filterGroupData.group_name,
-        group_order: filterGroupData.group_order,
-        group_condition: filterGroupData.group_condition,
-        description: filterGroupData.description,
-      }),
-    })
-  }
-
-  async getFilterGroupById(groupId: string): Promise<FilterGroup> {
-    return this.makeRequest(`/filter-groups/${groupId}`)
-  }
-
-  async updateFilterGroup(groupId: string, updates: Partial<Omit<FilterGroup, "id">>) {
-    return this.makeRequest(`/filter-groups/${groupId}`, {
-      method: "PUT",
-      body: JSON.stringify(updates),
-    })
-  }
-
-  async deleteFilterGroup(groupId: string) {
-    return this.makeRequest(`/filter-groups/${groupId}`, {
-      method: "DELETE",
-    })
-  }
-
-  // Filters
-  async getFiltersByGroupId(groupId: string): Promise<Filter[]> {
-    return this.makeRequest(`/filter-groups/${groupId}/filters`)
-  }
-
-  async getFiltersBySegmentId(segmentId: string): Promise<Filter[]> {
-    return this.makeRequest(`/segments/${segmentId}/filters`)
-  }
-
-  async createFilter(filterData: {
-    filter_group_id: string
-    column_name: string
-    column_data_type: string
-    filter_operator: string
-    filter_value: string
-    filter_value_2?: string
-    filter_order: number
-  }) {
-    return this.makeRequest(`/filter-groups/${filterData.filter_group_id}/filters`, {
-      method: "POST",
-      body: JSON.stringify({
-        column_name: filterData.column_name,
-        column_data_type: filterData.column_data_type,
-        filter_operator: filterData.filter_operator,
-        filter_value: filterData.filter_value,
-        filter_value_2: filterData.filter_value_2,
-        filter_order: filterData.filter_order,
-      }),
-    })
-  }
-
-  async createFiltersBulk(groupId: string, filters: Array<Omit<Filter, "id" | "filter_group_id" | "is_active">>) {
-    return this.makeRequest(`/filter-groups/${groupId}/filters/bulk`, {
-      method: "POST",
-      body: JSON.stringify({ filters }),
-    })
-  }
-
-  async getFilterById(filterId: string): Promise<Filter> {
-    return this.makeRequest(`/filters/${filterId}`)
-  }
-
-  async updateFilter(filterId: string, updates: Partial<Omit<Filter, "id" | "filter_group_id">>) {
-    return this.makeRequest(`/filters/${filterId}`, {
-      method: "PUT",
-      body: JSON.stringify(updates),
-    })
-  }
-
-  async deleteFilter(filterId: string) {
-    return this.makeRequest(`/filters/${filterId}`, {
-      method: "DELETE",
     })
   }
 
@@ -611,7 +492,9 @@ class DataService {
 
   // Column visibility methods
   async getColumnVisibility(tableName: string): Promise<ColumnVisibilityResponse> {
-    return this.makeRequest(`/admin/column-visibility/${tableName}`)
+    // Add a timestamp to prevent caching issues with schema context
+    const timestamp = new Date().getTime();
+    return this.makeRequest(`/admin/column-visibility/${tableName}?_=${timestamp}`)
   }
 
   async updateColumnVisibility(

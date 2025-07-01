@@ -57,6 +57,23 @@ class DatabricksSQLManager {
     }
   }
 
+  // Add a method to clear schema context
+  async clearSchemaContext() {
+    try {
+      await this.connect();
+      // Reset to the default schema context
+      const defaultSchema = process.env.DB_NAME || 'app_schema';
+      const schemaSetQuery = `USE ${defaultSchema}`;
+      const schemaOperation = await this.session.executeStatement(schemaSetQuery);
+      await schemaOperation.close();
+      console.log(`Reset to default schema: ${defaultSchema}`);
+      return true;
+    } catch (error) {
+      console.error("Error clearing schema context:", error);
+      throw error;
+    }
+  }
+
   async executeQuery(query, params = [], retries = MAX_RETRIES, schema = null) {
     try {
       await this.connect();
@@ -173,10 +190,16 @@ const close = async () => {
   return await manager.close();
 };
 
+// Add function to clear schema context
+const clearSchemaContext = async () => {
+  return await manager.clearSchemaContext();
+};
+
 module.exports = {
   connect,
   executeQuery,
   executeGoldSchemaQuery,
   executeAppSchemaQuery,
+  clearSchemaContext,
   close,
 };

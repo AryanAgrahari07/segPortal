@@ -1,4 +1,4 @@
-const { executeGoldSchemaQuery, executeAppSchemaQuery } = require('../../database/database.js');
+const { executeGoldSchemaQuery, executeAppSchemaQuery, clearSchemaContext } = require('../../database/database.js');
 const { getVisibleColumns, getVisibleColumnsForSegment } = require('../admin/column_visibility.js');
 require('dotenv').config();
 
@@ -135,6 +135,9 @@ exports.getTableData = async (req, res) => {
     
     // Get filter data from request body
     const { filterGroups, groupConditions, customSql, segmentId } = req.body;
+    
+    // Clear schema context before proceeding to ensure we use the correct schema
+    await clearSchemaContext();
     
     // Ensure segmentId is valid
     const validSegmentId = segmentId && segmentId !== 'null' && segmentId !== 'undefined' ? segmentId : undefined;
@@ -472,6 +475,9 @@ exports.getTableDataWithSegment = async (req, res) => {
         message: 'Segment ID is required'
       });
     }
+    
+    // Clear schema context before proceeding to ensure we use the correct schema
+    await clearSchemaContext();
     
     // Ensure segmentId is valid
     const validSegmentId = segmentId;
@@ -886,6 +892,9 @@ exports.getTableMetadata = async (req, res) => {
         message: 'Invalid table name format'
       });
     }
+    
+    // Clear schema context before proceeding to ensure we use the correct schema
+    await clearSchemaContext();
     
     // Handle multi-part table names (catalog.schema.table)
     const parts = tableName.split('.');

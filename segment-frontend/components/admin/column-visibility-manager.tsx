@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Eye, EyeOff, Search, ChevronDown, ChevronUp, RotateCcw, ArrowLeft } from "lucide-react"
+import { Loader2, Eye, EyeOff, Search, ChevronDown, ChevronUp, RotateCcw, ArrowLeft, Save } from "lucide-react"
 import { dataService } from "@/services/data-service"
 import { useRouter } from "next/navigation"
 
@@ -259,160 +259,182 @@ export function ColumnVisibilityManager({ initialTableName }: ColumnVisibilityMa
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-col space-y-2">
-        <div className="flex items-start">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => router.push('/admin')}
-            className="flex items-center gap-1 mb-2 -ml-2 h-8"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Admin
-          </Button>
+    <>
+      {/* Full-screen loading overlay when saving */}
+      {saving && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+          <div className="bg-card rounded-lg p-8 shadow-lg flex flex-col items-center gap-4 max-w-md mx-auto">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <h3 className="text-xl font-semibold">Saving Changes</h3>
+            <p className="text-center text-muted-foreground">
+              Please wait while your column visibility settings are being saved.
+              <br />
+            </p>
+            <Save className="h-6 w-6 text-primary mt-2" />
+          </div>
         </div>
-        <CardTitle>Column Visibility Manager</CardTitle>
-        <CardDescription>
-          Control which columns will be visible to users in the UI. Hidden columns will not appear in data tables and cannot
-          be used in filters.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Table Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="table-select">Select Table</Label>
-          <Select value={selectedTable} onValueChange={setSelectedTable} disabled={tablesLoading}>
-            <SelectTrigger id="table-select">
-              {tablesLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Loading tables...</span>
+      )}
+
+      <Card className="w-full">
+        <CardHeader className="flex flex-col space-y-2">
+          <div className="flex items-start">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-1 mb-2 -ml-2 h-8"
+              disabled={saving}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Admin
+            </Button>
+          </div>
+          <CardTitle>Column Visibility Manager</CardTitle>
+          <CardDescription>
+            Control which columns will be visible to users in the UI. Hidden columns will not appear in data tables and cannot
+            be used in filters.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Table Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="table-select">Select Table</Label>
+            <Select value={selectedTable} onValueChange={setSelectedTable} disabled={tablesLoading || saving}>
+              <SelectTrigger id="table-select">
+                {tablesLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading tables...</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select a table" />
+                )}
+              </SelectTrigger>
+              <SelectContent>
+                {tables.length === 0 && !tablesLoading ? (
+                  <div className="text-center py-2 text-muted-foreground">No tables found</div>
+                ) : (
+                  tables.map((table, index) => (
+                    <SelectItem key={`${table.tableName}-${index}`} value={table.tableName}>
+                      {table.tableName}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Search & Actions */}
+          {selectedTable && (
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search columns..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  disabled={saving}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSortOrder}
+                  className="whitespace-nowrap"
+                  disabled={saving}
+                >
+                  Sort {sortOrder === "asc" ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetAllColumnsVisible}
+                  className="whitespace-nowrap"
+                  title="Reset all columns to visible"
+                  disabled={saving}
+                >
+                  <RotateCcw className="mr-1 h-4 w-4" /> Reset All
+                </Button>
+                <Button
+                  onClick={saveChanges}
+                  disabled={!hasChanges || saving}
+                  className="whitespace-nowrap"
+                >
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Column List */}
+          {selectedTable && (
+            <>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : columns.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No columns found for this table or table does not exist.
                 </div>
               ) : (
-                <SelectValue placeholder="Select a table" />
-              )}
-            </SelectTrigger>
-            <SelectContent>
-              {tables.length === 0 && !tablesLoading ? (
-                <div className="text-center py-2 text-muted-foreground">No tables found</div>
-              ) : (
-                tables.map((table, index) => (
-                  <SelectItem key={`${table.tableName}-${index}`} value={table.tableName}>
-                    {table.tableName}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Search & Actions */}
-        {selectedTable && (
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search columns..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleSortOrder}
-                className="whitespace-nowrap"
-              >
-                Sort {sortOrder === "asc" ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={resetAllColumnsVisible}
-                className="whitespace-nowrap"
-                title="Reset all columns to visible"
-              >
-                <RotateCcw className="mr-1 h-4 w-4" /> Reset All
-              </Button>
-              <Button
-                onClick={saveChanges}
-                disabled={!hasChanges || saving}
-                className="whitespace-nowrap"
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Changes
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Column List */}
-        {selectedTable && (
-          <>
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : columns.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No columns found for this table or table does not exist.
-              </div>
-            ) : (
-              <>
-                <Separator />
-                <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
-                  <div className="space-y-2">
-                    {sortedColumns.map((column) => (
-                      <div
-                        key={column.column_name}
-                        className={`flex items-center justify-between p-2 hover:bg-muted rounded ${column.isDirty ? 'bg-muted/50' : ''}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {column.is_visible ? (
-                            <Eye className="h-4 w-4 text-primary" />
-                          ) : (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          <span
-                            className={`font-mono text-sm ${
-                              column.is_visible ? "" : "text-muted-foreground"
-                            }`}
-                          >
-                            {column.column_name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-xs text-muted-foreground">
-                            {column.updated_at
-                              ? `Updated ${new Date(column.updated_at).toLocaleDateString()} by ${
-                                  column.updated_by || "system"
-                                }`
-                              : "Default setting"}
+                <>
+                  <Separator />
+                  <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
+                    <div className="space-y-2">
+                      {sortedColumns.map((column) => (
+                        <div
+                          key={column.column_name}
+                          className={`flex items-center justify-between p-2 hover:bg-muted rounded ${column.isDirty ? 'bg-muted/50' : ''}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {column.is_visible ? (
+                              <Eye className="h-4 w-4 text-primary" />
+                            ) : (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span
+                              className={`font-mono text-sm ${
+                                column.is_visible ? "" : "text-muted-foreground"
+                              }`}
+                            >
+                              {column.column_name}
+                            </span>
                           </div>
-                          <Switch
-                            checked={column.is_visible}
-                            onCheckedChange={() => toggleColumnVisibility(column.column_name)}
-                          />
+                          <div className="flex items-center gap-4">
+                            <div className="text-xs text-muted-foreground">
+                              {column.updated_at
+                                ? `Updated ${new Date(column.updated_at).toLocaleDateString()} by ${
+                                    column.updated_by || "system"
+                                  }`
+                                : "Default setting"}
+                            </div>
+                            <Switch
+                              checked={column.is_visible}
+                              onCheckedChange={() => toggleColumnVisibility(column.column_name)}
+                              disabled={saving}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </>
   )
 } 

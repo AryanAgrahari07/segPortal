@@ -24,7 +24,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       show: true,
     },
     {
-      name: "User Management",
+      name: "Admin Panel",
       href: "/admin",
       icon: Users,
       show: user?.role === "admin",

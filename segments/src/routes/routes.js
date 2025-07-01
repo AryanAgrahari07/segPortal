@@ -11,8 +11,8 @@ const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole, logout 
 const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
 const { getColumnVisibility, updateColumnVisibility } = require("../controllers/admin/column_visibility.js");
 
-const filterGroupsController = require("../controllers/segments/filter_groups");
-const filtersController = require("../controllers/segments/filters");
+// const filterGroupsController = require("../controllers/segments/filter_groups");
+// const filtersController = require("../controllers/segments/filters");
 
 // otp
 router.post("/send-otp", sanitizeInput, sendOTP);               
@@ -40,20 +40,20 @@ router.delete("/delete-segment/:segmentId", verifyToken, deleteSegment);
 router.put('/:segmentId/executed', verifyToken, updateLastExecuted);
 router.put("/toggle-segment-status/:segmentId", verifyToken, toggleSegmentStatus);
 
-// Filter Group routes
-router.get('/:segmentId/filter-groups', verifyToken, filterGroupsController.getFilterGroupsBySegmentId);
-router.post('/filter-groups', verifyToken, filterGroupsController.createFilterGroup);         
-router.get('/filter-groups/:groupId', verifyToken, filterGroupsController.getFilterGroupById); 
-router.put('/filter-groups/:groupId', verifyToken, filterGroupsController.updateFilterGroup);
-router.delete('/filter-groups/:groupId', verifyToken, filterGroupsController.deleteFilterGroup);
+// // Filter Group routes
+// router.get('/:segmentId/filter-groups', verifyToken, filterGroupsController.getFilterGroupsBySegmentId);
+// router.post('/filter-groups', verifyToken, filterGroupsController.createFilterGroup);         
+// router.get('/filter-groups/:groupId', verifyToken, filterGroupsController.getFilterGroupById); 
+// router.put('/filter-groups/:groupId', verifyToken, filterGroupsController.updateFilterGroup);
+// router.delete('/filter-groups/:groupId', verifyToken, filterGroupsController.deleteFilterGroup);
 
-// Filter routes
-router.get('/filter-groups/:groupId/filters', verifyToken, filtersController.getFiltersByGroupId);
-router.get('/:segmentId/filters', verifyToken, filtersController.getFiltersBySegmentId);
-router.post('/filters', verifyToken, filtersController.createFilter);
-router.get('/filters/:filterId', verifyToken, filtersController.getFilterById);
-router.put('/filters/:filterId', verifyToken, filtersController.updateFilter);
-router.delete('/filters/:filterId', verifyToken, filtersController.deleteFilter);
+// // Filter routes
+// router.get('/filter-groups/:groupId/filters', verifyToken, filtersController.getFiltersByGroupId);
+// router.get('/:segmentId/filters', verifyToken, filtersController.getFiltersBySegmentId);
+// router.post('/filters', verifyToken, filtersController.createFilter);
+// router.get('/filters/:filterId', verifyToken, filtersController.getFilterById);
+// router.put('/filters/:filterId', verifyToken, filtersController.updateFilter);
+// router.delete('/filters/:filterId', verifyToken, filtersController.deleteFilter);
 
 // users
 router.post("/add-user", verifyToken, addUser);        

@@ -1,4 +1,4 @@
-const { executeAppSchemaQuery, executeGoldSchemaQuery } = require('../../database/database.js');
+const { executeAppSchemaQuery, executeGoldSchemaQuery, clearSchemaContext } = require('../../database/database.js');
 
 /**
  * Get column visibility configuration for a specific table
@@ -17,6 +17,9 @@ exports.getColumnVisibility = async (req, res) => {
     // First, get all columns from the table to make sure we have a complete list
     let tableColumns = [];
     try {
+      // Clear schema context before executing the gold schema query
+      await clearSchemaContext();
+      
       // Handle multi-part table names (catalog.schema.table)
       const parts = tableName.split('.');
       let quotedTableName;
@@ -239,6 +242,9 @@ exports.getVisibleColumns = async (tableName) => {
       throw new Error('Table name is required');
     }
 
+    // Clear schema context before executing the gold schema query
+    await clearSchemaContext();
+    
     // First, get all columns from the table
     let tableColumns = [];
     try {
@@ -353,8 +359,66 @@ exports.getColumnsInSegmentFilters = async (segmentId) => {
  */
 exports.getVisibleColumnsForSegment = async (tableName, segmentId) => {
   try {
-    // Get standard visible columns
-    const visibleColumns = await this.getVisibleColumns(tableName);
+    if (!tableName) {
+      throw new Error('Table name is required');
+    }
+
+    // Clear schema context before executing the gold schema query
+    await clearSchemaContext();
+    
+    // First, get all columns from the table
+    let tableColumns = [];
+    try {
+      // Handle multi-part table names (catalog.schema.table)
+      const parts = tableName.split('.');
+      let quotedTableName;
+      
+      if (parts.length === 3) {
+        // Format: catalog.schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\`.\`${parts[2]}\``;
+      } else if (parts.length === 2) {
+        // Format: schema.table
+        quotedTableName = `\`${parts[0]}\`.\`${parts[1]}\``;
+      } else {
+        // Format: just table
+        quotedTableName = `\`${tableName}\``;
+      }
+      
+      // Get all columns from the table
+      const columnCheckQuery = `DESCRIBE TABLE ${quotedTableName}`;
+      const columns = await executeGoldSchemaQuery(columnCheckQuery);
+      
+      // Store column names for later use
+      tableColumns = columns.map(col => col.col_name || col.name || '');
+    } catch (error) {
+      console.error('Error getting table columns:', error);
+      throw new Error(`Error retrieving table columns: ${error.message}`);
+    }
+
+    // Get existing column visibility configurations
+    const query = `
+      SELECT 
+        column_name, 
+        is_visible
+      FROM 
+        column_visibility
+      WHERE 
+        table_name = '${tableName}'
+    `;
+    
+    const configurations = await executeAppSchemaQuery(query);
+    
+    // Create a map for quick lookups
+    const configMap = {};
+    configurations.forEach(config => {
+      configMap[config.column_name] = config.is_visible;
+    });
+    
+    // Filter to only visible columns
+    const visibleColumns = tableColumns.filter(column => {
+      // If there's no configuration, default to visible
+      return configMap[column] !== false;
+    });
     
     // If no segmentId is provided, return standard visible columns
     if (!segmentId || segmentId === 'null' || segmentId === 'undefined') {

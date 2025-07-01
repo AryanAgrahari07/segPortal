@@ -1,7 +1,10 @@
-const {executeGoldSchemaQuery} = require('../../database/database.js');
+const {executeGoldSchemaQuery, clearSchemaContext} = require('../../database/database.js');
 
 const getAllTables = async (req, res) => {
   try {
+    // Clear any previous schema context first to prevent cache issues
+    await clearSchemaContext();
+    
     // Query to get all tables from the gold schema
     const query = `
       SHOW TABLES
