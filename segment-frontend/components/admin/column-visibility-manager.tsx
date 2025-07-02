@@ -177,11 +177,14 @@ export function ColumnVisibilityManager({ initialTableName }: ColumnVisibilityMa
         is_visible: col.is_visible,
       }))
 
+      const user = localStorage.getItem("user")
+      const userEmail = user ? JSON.parse(user).email : "system"
+
       const response = await dataService.updateColumnVisibility(
         selectedTable,
         configurations,
         // Get current user from localStorage if available
-        localStorage.getItem("userName") || undefined
+        userEmail || "system"
       )
 
       if (response.success) {

@@ -513,6 +513,151 @@ class DataService {
       }),
     })
   }
+
+  // Cache for unique column values
+  private uniqueValuesCache: Record<string, {
+    timestamp: number,
+    data: any[],
+    pagination: any
+  }> = {};
+  
+  // Cache expiration time in milliseconds (5 minutes)
+  private CACHE_EXPIRATION = 5 * 60 * 1000;
+
+  async getUniqueColumnValues(
+    tableName: string, 
+    columnName: string, 
+    params?: {
+      page?: number, 
+      limit?: number, 
+      search?: string,
+      segmentId?: string,
+      skipCache?: boolean
+    }
+  ) {
+    const page = params?.page || 1;
+    const limit = params?.limit || 25;
+    const search = params?.search || '';
+    const segmentId = params?.segmentId || '';
+    const skipCache = params?.skipCache || false;
+    
+    // Create a cache key based on the parameters
+    const cacheKey = `${tableName}:${columnName}:${page}:${limit}:${search}:${segmentId}`;
+    
+    // Check if we have a valid cached response
+    if (!skipCache && this.uniqueValuesCache[cacheKey]) {
+      const cachedData = this.uniqueValuesCache[cacheKey];
+      const now = Date.now();
+      
+      // If cache is still valid (less than 5 minutes old)
+      if (now - cachedData.timestamp < this.CACHE_EXPIRATION) {
+        console.log('Using cached unique values for:', cacheKey);
+        return {
+          success: true,
+          data: cachedData.data,
+          pagination: cachedData.pagination
+        };
+      } else {
+        // Delete expired cache entry
+        delete this.uniqueValuesCache[cacheKey];
+      }
+    }
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(search && { search }),
+      ...(segmentId && { segmentId })
+    }).toString();
+    
+    // Make the API request with timeout
+    try {
+      // Create a timeout promise that rejects after 5 seconds
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), 5000);
+      });
+      
+      // Race the actual request against the timeout
+      const response = await Promise.race([
+        this.makeRequest(`/table-data/${tableName}/column/${columnName}/unique-values?${queryParams}`),
+        timeoutPromise
+      ]) as any;
+      
+      // If the response is empty or has no data, return a consistent empty result
+      if (!response || !response.data) {
+        return {
+          success: true,
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0
+          }
+        };
+      }
+      
+      // Cache the response if successful
+      if (response && response.success && response.data) {
+        this.uniqueValuesCache[cacheKey] = {
+          timestamp: Date.now(),
+          data: response.data,
+          pagination: response.pagination
+        };
+        
+        // Clean up old cache entries if we have too many (keep only the 100 most recent)
+        this.cleanCache();
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error fetching unique values:', error);
+      
+      // If there's a network or timeout error, try to use stale cache if available
+      if (this.uniqueValuesCache[cacheKey]) {
+        console.log('Using stale cache for:', cacheKey);
+        const staleCache = this.uniqueValuesCache[cacheKey];
+        return {
+          success: true,
+          data: staleCache.data,
+          pagination: staleCache.pagination,
+          fromStaleCache: true
+        };
+      }
+      
+      // Return a graceful empty result if all else fails
+      return {
+        success: true,
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0
+        },
+        error: error.message
+      };
+    }
+  }
+
+  // Clean up old cache entries to prevent memory leaks
+  private cleanCache() {
+    const cacheEntries = Object.entries(this.uniqueValuesCache);
+    
+    // If we have more than 100 cache entries, remove the oldest ones
+    if (cacheEntries.length > 100) {
+      // Sort by timestamp (oldest first)
+      const sortedEntries = cacheEntries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      
+      // Remove the oldest entries, keeping only the 100 most recent
+      const entriesToRemove = sortedEntries.slice(0, sortedEntries.length - 100);
+      
+      for (const [key] of entriesToRemove) {
+        delete this.uniqueValuesCache[key];
+      }
+    }
+  }
 }
 
 export const dataService = new DataService()

@@ -1036,3 +1036,173 @@ exports.getTableMetadata = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get unique values for a column with pagination and search
+ */
+exports.getUniqueColumnValues = async (req, res) => {
+  try {
+    // Get table name and column name
+    const { tableName, columnName } = req.params;
+    
+    // Get pagination and search parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 25;
+    const search = req.query.search || '';
+    const segmentId = req.query.segmentId;
+    
+    // Validate inputs
+    if (!tableName || !columnName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Table name and column name are required'
+      });
+    }
+
+    // Additional validation for security
+    const validColumnNameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!validColumnNameRegex.test(columnName)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid column name format'
+      });
+    }
+    
+    // Clear schema context
+    await clearSchemaContext();
+    
+    // Format table name for SQL query - safer method using parts
+    const parts = tableName.split('.');
+    let quotedTableName;
+    
+    if (parts.length === 3) {
+      // Format: catalog.schema.table
+      quotedTableName = `\`${parts[0].replace(/[^\w.-]/g, '')}\`.\`${parts[1].replace(/[^\w.-]/g, '')}\`.\`${parts[2].replace(/[^\w.-]/g, '')}\``;
+    } else if (parts.length === 2) {
+      // Format: schema.table
+      quotedTableName = `\`${parts[0].replace(/[^\w.-]/g, '')}\`.\`${parts[1].replace(/[^\w.-]/g, '')}\``;
+    } else {
+      // Format: just table
+      quotedTableName = `\`${tableName.replace(/[^\w.-]/g, '')}\``;
+    }
+    
+    // Escape column name
+    const escapedColumnName = `\`${columnName.replace(/[^\w.-]/g, '')}\``;
+    
+    // Calculate offset for pagination - ensure positive values
+    const offset = Math.max(0, (page - 1) * limit);
+    const safeLimit = Math.min(100, Math.max(1, limit)); // Limit between 1 and 100
+    
+    // Build the query
+    let query;
+    let countQuery;
+    
+    if (search && search.trim() !== '') {
+      // Include search condition with parameterized query approach
+      // Escape search pattern to prevent SQL injection
+      const searchPattern = `%${search.replace(/'/g, "''").replace(/\\/g, "\\\\").replace(/_/g, "\\_").replace(/%/g, "\\%")}%`;
+      
+      // Fix: Specify VARCHAR length and use string conversion functions instead of CAST when needed
+      query = `
+        SELECT DISTINCT ${escapedColumnName} 
+        FROM ${quotedTableName} 
+        WHERE ${escapedColumnName} IS NOT NULL 
+          AND LOWER(${escapedColumnName}) LIKE LOWER('${searchPattern}')
+        ORDER BY ${escapedColumnName}
+        LIMIT ${safeLimit} OFFSET ${offset}
+      `;
+      
+      countQuery = `
+        SELECT COUNT(DISTINCT ${escapedColumnName}) as total 
+        FROM ${quotedTableName} 
+        WHERE ${escapedColumnName} IS NOT NULL 
+          AND LOWER(${escapedColumnName}) LIKE LOWER('${searchPattern}')
+      `;
+    } else {
+      // Without search condition
+      query = `
+        SELECT DISTINCT ${escapedColumnName} 
+        FROM ${quotedTableName} 
+        WHERE ${escapedColumnName} IS NOT NULL 
+        ORDER BY ${escapedColumnName}
+        LIMIT ${safeLimit} OFFSET ${offset}
+      `;
+      
+      countQuery = `
+        SELECT COUNT(DISTINCT ${escapedColumnName}) as total 
+        FROM ${quotedTableName} 
+        WHERE ${escapedColumnName} IS NOT NULL
+      `;
+    }
+    
+    // Execute queries with added try/catch blocks for each query
+    let uniqueValues;
+    let countResult;
+    
+    try {
+      uniqueValues = await executeGoldSchemaQuery(query);
+    } catch (queryError) {
+      console.error('Error executing unique values query:', queryError);
+      
+      // Fallback query without CAST if the first one fails
+      try {
+        // Try a simpler query without search if there was an error
+        if (search && search.trim() !== '') {
+          const fallbackQuery = `
+            SELECT DISTINCT ${escapedColumnName} 
+            FROM ${quotedTableName} 
+            WHERE ${escapedColumnName} IS NOT NULL 
+            ORDER BY ${escapedColumnName}
+            LIMIT ${safeLimit} OFFSET ${offset}
+          `;
+          uniqueValues = await executeGoldSchemaQuery(fallbackQuery);
+        } else {
+          throw queryError; // Re-throw if it wasn't a search-related issue
+        }
+      } catch (fallbackError) {
+        return res.status(500).json({
+          success: false,
+          message: 'Error fetching unique values',
+          error: queryError.message
+        });
+      }
+    }
+    
+    try {
+      countResult = await executeGoldSchemaQuery(countQuery);
+    } catch (countError) {
+      console.error('Error executing count query:', countError);
+      // Continue with an estimated count or zero if count query fails
+      countResult = [{ total: uniqueValues.length }];
+    }
+    
+    const total = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / safeLimit);
+    
+    // Extract just the values from the result
+    const values = uniqueValues.map(row => {
+      const value = row[columnName] !== undefined ? String(row[columnName]) : null;
+      return value;
+    }).filter(value => value !== null);
+    
+    // Return the results
+    return res.status(200).json({
+      success: true,
+      data: values,
+      pagination: {
+        page,
+        limit: safeLimit,
+        total,
+        totalPages
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching unique column values:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch unique column values',
+      error: error.message
+    });
+  }
+};

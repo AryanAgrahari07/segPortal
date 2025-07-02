@@ -6,11 +6,12 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Mail } from "lucide-react"
+import { Loader2, Mail, LockKeyhole, ArrowRight } from "lucide-react"
 import { authService } from "@/services/auth-service"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -51,43 +52,65 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
-      <Card className="w-full max-w-md glass-effect border-white/20">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-white">Welcome Back</CardTitle>
-          <CardDescription className="text-white/80">Enter your email to receive a verification code</CardDescription>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(120,119,198,0.15),transparent_40%)] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,rgba(59,130,246,0.1),transparent_30%)] pointer-events-none"></div>
+      
+      <Card className="w-full max-w-md border border-slate-800/50 shadow-xl bg-slate-900/70 backdrop-blur-xl">
+        <CardHeader className="space-y-1 pb-6">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <LockKeyhole className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold text-center text-white">Welcome Back</CardTitle>
+          <CardDescription className="text-slate-400 text-center">
+            Enter your email to receive a secure verification code
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSendOTP} className="space-y-4">
+          <form onSubmit={handleSendOTP} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-white">
+              <Label htmlFor="email" className="text-slate-300 font-medium">
                 Email Address
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-white/60" />
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                  className="pl-10 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent h-12"
                   required
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full bg-white text-purple-600 hover:bg-white/90" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 mt-2" 
+              disabled={loading}
+            >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending OTP...
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Sending OTP...</span>
                 </>
               ) : (
-                "Send Verification Code"
+                <>
+                  <span>Send Verification Code</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
               )}
             </Button>
           </form>
         </CardContent>
+        <CardFooter className="flex justify-center border-t border-slate-800 pt-4 pb-6">
+          <p className="text-sm text-slate-400">
+            Secure authentication powered by OTP verification
+          </p>
+        </CardFooter>
       </Card>
     </div>
   )

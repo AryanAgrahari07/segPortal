@@ -1,11 +1,27 @@
 "use client"
 
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Hash, Type, ToggleLeft } from "lucide-react"
+import { Trash2, Calendar, Hash, Type, ToggleLeft, Search, Loader2, ChevronDown } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { 
+  Command, 
+  CommandEmpty, 
+  CommandGroup, 
+  CommandInput, 
+  CommandItem, 
+  CommandList 
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { dataService } from "@/services/data-service"
+import { useParams, useSearchParams } from "next/navigation"
 
 interface Column {
   name: string
@@ -29,9 +45,7 @@ interface FilterBuilderProps {
   disabled?: boolean
 }
 
-export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = false }: FilterBuilderProps) {
-  const selectedColumn = columns.find((col) => col.name === filter.column)
-
+// Define operators function at the top level, outside of any component
   const getOperatorsForType = (type: string) => {
     switch (type) {
       case "STRING":
@@ -95,9 +109,269 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
     }
   }
 
-  const operators = getOperatorsForType(selectedColumn?.type || "STRING")
-  const needsSecondValue = filter.operator === "BETWEEN" || filter.operator === "NOT_BETWEEN"
-  const needsNoValue = filter.operator === "IS NULL" || filter.operator === "IS NOT NULL"
+// Enhanced debounce helper function
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+// Simplified throttle function
+function throttle<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
+  let lastCall = 0;
+  let timeoutId: NodeJS.Timeout | null = null;
+  
+  return (...args: Parameters<T>) => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastCall;
+    
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    
+    if (timeSinceLastCall >= delay) {
+      lastCall = now;
+      fn(...args);
+    } else {
+      timeoutId = setTimeout(() => {
+        lastCall = Date.now();
+        fn(...args);
+        timeoutId = null;
+      }, delay - timeSinceLastCall);
+    }
+  };
+}
+
+export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = false }: FilterBuilderProps) {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const tableName = params?.tableName as string;
+  const segmentId = searchParams?.get("segment");
+  
+  // Refs to prevent unnecessary re-renders
+  const requestIdRef = useRef(0);
+  const activeRequestRef = useRef<AbortController | null>(null);
+  const isFirstRenderRef = useRef(true);
+  
+  const selectedColumn = useMemo(() => columns.find((col) => col.name === filter.column), [columns, filter.column]);
+  const [uniqueValues, setUniqueValues] = useState<string[]>([]);
+  const [isLoadingValues, setIsLoadingValues] = useState(false);
+  const [hasMoreValues, setHasMoreValues] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [visibleValues, setVisibleValues] = useState<string[]>([]);
+  
+  // Request tracking refs
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const requestCountRef = useRef(0);
+  const lastRequestTimeRef = useRef(0);
+  const isRequestInProgressRef = useRef(false);
+
+  // Use the top-level getOperatorsForType function
+  const operators = useMemo(() => getOperatorsForType(selectedColumn?.type || "STRING"), [selectedColumn?.type]);
+  const needsSecondValue = filter.operator === "BETWEEN" || filter.operator === "NOT_BETWEEN";
+  const needsNoValue = filter.operator === "IS NULL" || filter.operator === "IS NOT NULL";
+  const isListType = filter.operator === "IN" || filter.operator === "NOT_IN";
+
+  // Calculate visible items based on scroll position - simple virtualization
+  useEffect(() => {
+    if (!dropdownRef.current || uniqueValues.length === 0) return;
+    
+    // Set initial visible values when data changes
+    setVisibleValues(uniqueValues.slice(0, Math.min(30, uniqueValues.length)));
+  }, [uniqueValues]);
+
+  const fetchUniqueValues = useCallback(async (page: number) => {
+    if (!filter.column || needsNoValue) return;
+    
+    // Rate limiting - don't allow requests more often than every 300ms
+    const now = Date.now();
+    if (now - lastRequestTimeRef.current < 300 && page > 1) {
+      return;
+    }
+    
+    // Don't allow concurrent requests
+    if (isRequestInProgressRef.current) {
+      return;
+    }
+    
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // Create new abort controller
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    
+    // Track this request
+    const requestId = ++requestCountRef.current;
+    lastRequestTimeRef.current = now;
+    isRequestInProgressRef.current = true;
+    
+    setIsLoadingValues(true);
+    
+    try {
+      // Use setTimeout to ensure the UI remains responsive
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Check if request was aborted during the timeout
+      if (abortController.signal.aborted) {
+        return;
+      }
+      
+      const response = await dataService.getUniqueColumnValues(
+        tableName, 
+        filter.column, 
+        {
+          page,
+          limit: 25,
+          search: debouncedSearchTerm,
+          segmentId: segmentId || undefined
+        }
+      );
+      
+      // Check if request was aborted or if a newer request has been made
+      if (abortController.signal.aborted || requestId !== requestCountRef.current) {
+        return;
+      }
+      
+      const data = response.data || [];
+      
+      // Update state in microtasks to avoid freezing
+      setTimeout(() => {
+        if (data.length === 0 || data.length < 25) {
+          setHasMoreValues(false);
+        } else {
+          setHasMoreValues(true);
+        }
+  
+        if (page === 1) {
+          setUniqueValues(data);
+        } else {
+          setUniqueValues(prev => [...prev, ...data]);
+        }
+        
+        setCurrentPage(page);
+        
+        // Reset loading state and request tracking
+        setIsLoadingValues(false);
+        isRequestInProgressRef.current = false;
+      }, 0);
+      
+    } catch (error) {
+      // Ignore aborted request errors
+      if ((error as any)?.name === 'AbortError') {
+        return;
+      }
+      
+      console.error("Error fetching unique values:", error);
+      
+      // Reset loading state and request tracking
+      setIsLoadingValues(false);
+      isRequestInProgressRef.current = false;
+    }
+  }, [filter.column, debouncedSearchTerm, needsNoValue, tableName, segmentId]);
+
+  // Optimized scroll handler with debounce built-in
+  const handleScroll = useCallback(() => {
+    if (!dropdownRef.current || !hasMoreValues || isLoadingValues || isRequestInProgressRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = dropdownRef.current;
+    
+    // Only trigger when scrolled past 70% of the container
+    if (scrollTop + clientHeight > scrollHeight * 0.7) {
+      fetchUniqueValues(currentPage + 1);
+    }
+  }, [hasMoreValues, isLoadingValues, currentPage, fetchUniqueValues]);
+
+  // Clear values whenever column changes
+  useEffect(() => {
+    setUniqueValues([]);
+    setVisibleValues([]);
+    setCurrentPage(1);
+    setHasMoreValues(true);
+    setSearchTerm('');
+    setIsDropdownOpen(false);
+    
+    // Clean up previous requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    isRequestInProgressRef.current = false;
+  }, [filter.column]);
+
+  // Fetch unique values when column or operator changes
+  useEffect(() => {
+    // Clean up previous requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    isRequestInProgressRef.current = false;
+    
+    if (filter.column && !needsNoValue) {
+      setUniqueValues([]);
+      setCurrentPage(1);
+      setHasMoreValues(true);
+      
+      // Small delay to ensure UI remains responsive
+      setTimeout(() => {
+        fetchUniqueValues(1);
+      }, 50);
+    }
+  }, [filter.column, filter.operator, needsNoValue, fetchUniqueValues]);
+
+  // Fetch more values when search term changes (debounced)
+  useEffect(() => {
+    if (!isDropdownOpen || !filter.column || needsNoValue) return;
+    
+    // Clean up previous requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    isRequestInProgressRef.current = false;
+    setUniqueValues([]);
+    setCurrentPage(1);
+    setHasMoreValues(true);
+    
+    // Small delay to ensure UI remains responsive
+    setTimeout(() => {
+      fetchUniqueValues(1);
+    }, 50);
+  }, [debouncedSearchTerm, isDropdownOpen, filter.column, needsNoValue, fetchUniqueValues]);
+
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
+  // getOperatorsForType function is now defined at the top level
 
   const getInputType = (columnType: string) => {
     switch (columnType) {
@@ -169,6 +443,144 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
     }
   }
 
+  // Determine if we should show the dropdown or not based on column type and operator
+  const shouldShowDropdown = () => {
+    if (needsNoValue) return false;
+    if (needsSecondValue) return false;
+    if (selectedColumn?.type === "BOOLEAN") return false; 
+    if (isListType) return false; // We don't show dropdown for IN operators since they use comma-separated values
+    
+    return true;
+  }
+  
+  // We need the direct input field without dropdown for these cases
+  const shouldShowDirectInput = () => {
+    if (needsNoValue) return false;
+    if (needsSecondValue) return true;
+    if (selectedColumn?.type === "BOOLEAN") return false;
+    if (isListType) return true;
+    
+    return false;
+  }
+
+  // Handle selection without re-rendering the entire list
+  const handleValueSelect = useCallback((value: string) => {
+    onUpdate({ value });
+    setIsDropdownOpen(false);
+  }, [onUpdate]);
+
+  // Simplified dropdown implementation
+  const renderDropdown = () => {
+    return (
+      <Popover open={isDropdownOpen} onOpenChange={(open) => {
+        setIsDropdownOpen(open);
+        
+        // If opening dropdown and we have no values, fetch them
+        if (open && filter.column && !needsNoValue && uniqueValues.length === 0) {
+          setTimeout(() => {
+            fetchUniqueValues(1);
+          }, 50);
+        }
+      }}>
+        <PopoverTrigger asChild>
+          <div className="relative flex w-full max-w-[280px]">
+            <Input
+              type="text"
+              value={filter.value || ""}
+              onChange={(e) => onUpdate({ value: e.target.value })}
+              placeholder="Enter or select a value"
+              className="h-9 text-sm pr-9 w-full"
+              disabled={disabled}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 h-9 w-9"
+              disabled={disabled}
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            >
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-[280px] p-0">
+          <div className="border-b border-border/10 px-3 py-2">
+            <Input
+              placeholder="Search or type a custom value..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-8 focus-visible:ring-0 border-0 focus-visible:ring-offset-0 text-sm px-2"
+              onKeyDown={(e) => {
+                // Apply custom value when user presses Enter
+                if (e.key === 'Enter') {
+                  onUpdate({ value: searchTerm });
+                  setIsDropdownOpen(false);
+                }
+              }}
+            />
+          </div>
+          <div 
+            className="h-[200px] overflow-y-auto py-1 px-1" 
+            ref={dropdownRef}
+            onScroll={handleScroll}
+          >
+            {/* Allow using the current search term as a custom value */}
+            {searchTerm && (
+              <div className="border-b border-border/10 pb-1 mb-1">
+                <button
+                  className="w-full text-left px-2 py-1.5 text-sm rounded-sm bg-primary/10 hover:bg-primary/20 hover:text-accent-foreground cursor-default focus:bg-primary/20 focus:text-accent-foreground focus:outline-none"
+                  onClick={() => {
+                    onUpdate({ value: searchTerm });
+                    setIsDropdownOpen(false);
+                  }}
+                >
+                  <span className="font-medium">Use custom value:</span> {searchTerm}
+                </button>
+              </div>
+            )}
+            
+            {uniqueValues.length === 0 && isLoadingValues ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                <span>Loading values...</span>
+              </div>
+            ) : uniqueValues.length === 0 && !isLoadingValues ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                {searchTerm ? 'No matching values found.' : 'No values found'}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {uniqueValues.map((value, index) => (
+                  <button
+                    key={`${value}-${index}`}
+                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground cursor-default focus:bg-accent focus:text-accent-foreground focus:outline-none"
+                    onClick={() => {
+                      onUpdate({ value });
+                      setIsDropdownOpen(false);
+                    }}
+                  >
+                    {value}
+                  </button>
+                ))}
+                {isLoadingValues && (
+                  <div className="flex items-center justify-center p-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    <span>Loading more...</span>
+                  </div>
+                )}
+                {!isLoadingValues && hasMoreValues && (
+                  <div className="text-center p-2 text-xs text-muted-foreground">
+                    Scroll for more
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
   return (
     <TooltipProvider>
       <div
@@ -180,29 +592,81 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
         <div className="flex items-center gap-3">
           {/* Column Selection */}
           <div className="w-[60%] min-w-[100px]">
-            <Select value={filter.column} onValueChange={(value) => onUpdate({ column: value })} disabled={disabled}>
-              <SelectTrigger className="h-9 text-sm truncate">
-                <SelectValue placeholder="Select column" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {columns.map((column) => (
-                  <SelectItem key={column.name} value={column.name}>
-                    <div className="flex items-center space-x-2 pr-2">
-                      <span className={getTypeColor(column.type)}>{getColumnIcon(column.type)}</span>
-                      <span className="font-medium truncate">{column.name}</span>
-                      <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0">
-                        {column.type}
+            <Popover open={isColumnDropdownOpen} onOpenChange={setIsColumnDropdownOpen}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  role="combobox" 
+                  className="h-9 text-sm w-full justify-between font-normal"
+                  disabled={disabled}
+                >
+                  {filter.column ? (
+                    <div className="flex items-center space-x-2 truncate">
+                      <span className={getTypeColor(selectedColumn?.type || "STRING")}>
+                        {getColumnIcon(selectedColumn?.type || "STRING")}
+                      </span>
+                      <span className="truncate">{filter.column}</span>
+                      <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 ml-1">
+                        {selectedColumn?.type || "STRING"}
                       </Badge>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  ) : (
+                    "Select column"
+                  )}
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search columns..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>No columns found.</CommandEmpty>
+                    <CommandGroup>
+                      {columns.map((column) => (
+                        <CommandItem
+                          key={column.name}
+                          value={column.name}
+                          onSelect={(value) => {
+                            // When column changes, clear the value
+                            onUpdate({ 
+                              column: value,
+                              value: '',
+                              value2: ''
+                            });
+                            // Close the dropdown after selection
+                            setIsColumnDropdownOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center space-x-2 w-full">
+                            <span className={getTypeColor(column.type)}>{getColumnIcon(column.type)}</span>
+                            <span className="font-medium truncate">{column.name}</span>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 ml-auto">
+                              {column.type}
+                            </Badge>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Operator Selection */}
           <div className="w-[40%] min-w-[100px]">
-            <Select value={filter.operator} onValueChange={(value) => onUpdate({ operator: value })} disabled={disabled}>
+            <Select 
+              value={filter.operator} 
+              onValueChange={(value) => {
+                // When operator changes, clear the value
+                onUpdate({ 
+                  operator: value,
+                  value: '',
+                  value2: ''
+                });
+              }} 
+              disabled={disabled}
+            >
               <SelectTrigger className="h-9 text-sm truncate">
                 <SelectValue placeholder="Select operator" />
               </SelectTrigger>
@@ -222,17 +686,17 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
           {/* Value Input(s) */}
           <div className="flex-1 min-w-0">
             {needsNoValue ? (
-              <div className="h-9 flex items-center text-sm text-muted-foreground px-3 bg-muted rounded-md">
+              <div className="h-9 flex items-center text-sm text-muted-foreground px-3 bg-muted rounded-md max-w-[280px]">
                 No value needed
               </div>
             ) : needsSecondValue ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 max-w-[280px]">
                 <Input
                   type={getInputType(selectedColumn?.type || "STRING")}
                   value={filter.value}
                   onChange={(e) => onUpdate({ value: e.target.value })}
                   placeholder="From"
-                  className="h-9 text-sm"
+                  className="h-9 text-sm w-full"
                   disabled={disabled}
                 />
                 <Input
@@ -240,11 +704,12 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
                   value={filter.value2 || ""}
                   onChange={(e) => onUpdate({ value2: e.target.value })}
                   placeholder="To"
-                  className="h-9 text-sm"
+                  className="h-9 text-sm w-full"
                   disabled={disabled}
                 />
               </div>
             ) : selectedColumn?.type === "BOOLEAN" ? (
+              <div className="max-w-[280px]">
               <Select value={filter.value} onValueChange={(value) => onUpdate({ value })} disabled={disabled}>
                 <SelectTrigger className="h-9 text-sm truncate">
                   <SelectValue placeholder="Select value" />
@@ -254,15 +719,30 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
                   <SelectItem value="false">False</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
+            ) : shouldShowDropdown() ? renderDropdown() : shouldShowDirectInput() ? (
+              <div className="max-w-[280px]">
+                <Input
+                  type={getInputType(selectedColumn?.type || "STRING")}
+                  value={filter.value}
+                  onChange={(e) => onUpdate({ value: e.target.value })}
+                  placeholder={getPlaceholder(selectedColumn?.type || "STRING", filter.operator)}
+                  className="h-9 text-sm w-full"
+                  disabled={disabled}
+                />
+              </div>
             ) : (
+              // This shouldn't occur, but is a fallback
+              <div className="max-w-[280px]">
               <Input
                 type={getInputType(selectedColumn?.type || "STRING")}
                 value={filter.value}
                 onChange={(e) => onUpdate({ value: e.target.value })}
                 placeholder={getPlaceholder(selectedColumn?.type || "STRING", filter.operator)}
-                className="h-9 text-sm"
+                  className="h-9 text-sm w-full"
                 disabled={disabled}
               />
+              </div>
             )}
           </div>
 

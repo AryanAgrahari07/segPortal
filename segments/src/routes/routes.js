@@ -8,7 +8,7 @@ const { refreshToken } = require("../controllers/refreshToken/refreshToken.js");
 const { getAllTables } = require("../controllers/allTables/tables.js");
 const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegment, updateLastExecuted, toggleSegmentStatus, getSegmentsSummary } = require("../controllers/segments/segment.js");
 const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole, logout } = require("../controllers/addUser/adduser.js");
-const { getTableMetadata, getTableData, getTableDataWithSegment } = require("../controllers/tableData/tabledata.js");
+const { getTableMetadata, getTableData, getTableDataWithSegment, getUniqueColumnValues } = require("../controllers/tableData/tabledata.js");
 const { getColumnVisibility, updateColumnVisibility } = require("../controllers/admin/column_visibility.js");
 
 // const filterGroupsController = require("../controllers/segments/filter_groups");
@@ -28,6 +28,7 @@ router.post("/logout", sanitizeInput, logout);
 router.get("/tables",verifyToken, getAllTables);                            
 router.get("/table-metadata/:tableName", verifyToken, getTableMetadata);              
 router.post("/table-data/:tableName", verifyToken, getTableData);                        
+router.get("/table-data/:tableName/column/:columnName/unique-values", verifyToken, getUniqueColumnValues);                     
 router.get("/table-data-with-segment/:tableName/:segmentId", verifyToken, getTableDataWithSegment);
 
 // segments

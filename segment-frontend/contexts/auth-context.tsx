@@ -31,8 +31,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // Constants for token refresh
-const REFRESH_BUFFER_TIME = 25; // seconds before expiry to refresh
-const CHECK_INTERVAL = 10; // check every 10 seconds
+const REFRESH_BUFFER_TIME = 180; // seconds before expiry to refresh
+const CHECK_INTERVAL = 60; // check every 10 seconds
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
