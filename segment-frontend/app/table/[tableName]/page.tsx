@@ -41,7 +41,34 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-// Import required types from react-day-picker
+
+// Add custom animation keyframes
+import { keyframes } from "tailwindcss/defaultTheme"
+
+// Custom progress animation keyframe
+const progressAnimation = {
+  '@keyframes progress': {
+    '0%': { transform: 'translateX(-100%)' },
+    '50%': { transform: 'translateX(0%)' },
+    '100%': { transform: 'translateX(100%)' }
+  },
+  '.animate-progress': {
+    animation: 'progress 1.5s ease-in-out infinite'
+  }
+}
+
+// Inject the animation into the stylesheet
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style')
+  style.textContent = `
+    @keyframes progress {
+      0% { transform: translateX(-100%); }
+      50% { transform: translateX(0%); }
+      100% { transform: translateX(100%); }
+    }
+  `
+  document.head.appendChild(style)
+}
 
 interface Column {
   name: string
@@ -91,7 +118,7 @@ const gradientCardStyles = cva(
   {
     variants: {
       variant: {
-        primary: "from-primary/5 to-primary/10 border-primary/20 hover:border-primary/30",
+        primary: "from-violet-500/5 to-indigo-500/10 border-violet-500/20 hover:border-violet-500/30",
         secondary: "from-secondary/5 to-secondary/10 border-secondary/20 hover:border-secondary/30",
         accent: "from-orange-500/5 to-orange-600/10 border-orange-500/20 hover:border-orange-500/30",
         info: "from-blue-500/5 to-blue-600/10 border-blue-500/20 hover:border-blue-500/30",
@@ -204,20 +231,20 @@ function DatePicker({
         <Button
           variant="outline"
           className={cn(
-            "w-full justify-start text-left font-normal h-9 border-blue-500/20 focus-visible:ring-blue-500/30",
+            "w-full justify-start text-left font-normal h-9 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30",
             !date && "text-muted-foreground",
             className
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+          <CalendarIcon className="mr-2 h-4 w-4 text-violet-600" />
           {date ? formatDate(selectedDate!) : <span>Pick a date</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <div className="p-3 border-b border-border/20 flex justify-between items-center">
-          <span className="text-sm font-medium">Go to year</span>
+        <div className="p-3 border-b border-violet-200 dark:border-violet-800 flex justify-between items-center">
+          <span className="text-sm font-medium text-violet-700 dark:text-violet-300">Go to year</span>
           <Select value={(month?.getFullYear() || currentYear).toString()} onValueChange={handleYearChange}>
-            <SelectTrigger className="h-8 w-[5rem] px-2 text-xs border-blue-500/20 focus-visible:ring-blue-500/30">
+            <SelectTrigger className="h-8 w-[5rem] px-2 text-xs border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -240,12 +267,12 @@ function DatePicker({
           className="border-none shadow-none"
           classNames={{
             caption: "flex justify-center py-2 relative items-center",
-            caption_label: "text-sm font-medium",
+            caption_label: "text-sm font-medium text-violet-700 dark:text-violet-300",
             cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
-            day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/20",
-            day_selected: "bg-blue-500 text-white hover:bg-blue-400 hover:text-white focus:bg-blue-500 focus:text-white",
-            day_today: "bg-blue-100 text-blue-700 dark:bg-blue-800/30 dark:text-blue-300",
-            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-blue-500"
+            day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-violet-100 dark:hover:bg-violet-900/20",
+            day_selected: "bg-violet-600 text-white hover:bg-violet-500 hover:text-white focus:bg-violet-600 focus:text-white",
+            day_today: "bg-violet-100 text-violet-700 dark:bg-violet-800/30 dark:text-violet-300",
+            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-violet-600"
           }}
         />
       </PopoverContent>
@@ -285,8 +312,8 @@ function TimePicker({
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-blue-500/20 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2">
-        <Clock className="mr-2 h-4 w-4 text-blue-500" />
+      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-violet-300 dark:border-violet-700 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 focus-visible:ring-offset-2">
+        <Clock className="mr-2 h-4 w-4 text-violet-600" />
         <div className="flex items-center">
           <Select value={hours.toString().padStart(2, '0')} onValueChange={handleHourChange}>
             <SelectTrigger className="w-[4rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
@@ -1602,9 +1629,33 @@ export default function TableDetailPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Database className="h-12 w-12 animate-pulse mx-auto mb-4 text-muted-foreground" />
-            <p>Loading table data...</p>
+          <div className="text-center space-y-6">
+            <div className="relative">
+              <div className="w-24 h-24 mx-auto relative">
+                {/* Outer ring animation */}
+                <div className="absolute inset-0 rounded-full border-8 border-violet-200 dark:border-violet-800/40"></div>
+                <div className="absolute inset-0 rounded-full border-8 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
+                
+                {/* Middle ring animation - opposite direction */}
+                <div className="absolute inset-2 rounded-full border-6 border-violet-100 dark:border-violet-900/30"></div>
+                <div className="absolute inset-2 rounded-full border-6 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.5s] animate-reverse"></div>
+                
+                {/* Inner pulsing circle */}
+                <div className="absolute inset-5 rounded-full bg-gradient-to-br from-violet-600 to-indigo-500 animate-pulse"></div>
+                
+                {/* Icon */}
+                <Database className="h-8 w-8 text-white absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-md" />
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-lg font-medium bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent">Loading table data...</p>
+              <div className="flex justify-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-violet-600 animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></span>
+              </div>
+            </div>
           </div>
         </div>
       </DashboardLayout>
@@ -1621,12 +1672,12 @@ export default function TableDetailPage() {
     const endRecord = Math.min(page * pageSize, total);
     
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-4 pb-4 bg-muted/5 rounded-lg border border-green-500/10 py-3">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-4 pb-4 bg-violet-50/50 dark:bg-violet-900/10 rounded-lg border border-violet-200 dark:border-violet-800 py-3">
         <div className="text-sm font-medium flex items-center">
           <span className="text-muted-foreground mr-2">Showing</span> 
-          <span className="px-2 py-1 rounded bg-green-500/10 text-green-700 dark:text-green-300">{startRecord}-{endRecord}</span> 
+          <span className="px-2 py-1 rounded bg-violet-500/10 text-violet-700 dark:text-violet-300">{startRecord}-{endRecord}</span> 
           <span className="text-muted-foreground mx-2">of</span> 
-          <span className="px-2 py-1 rounded bg-green-500/10 text-green-700 dark:text-green-300">{total}</span> 
+          <span className="px-2 py-1 rounded bg-violet-500/10 text-violet-700 dark:text-violet-300">{total.toLocaleString()}</span> 
           <span className="text-muted-foreground ml-2">records</span>
         </div>
         <div className="flex items-center gap-3">
@@ -1634,7 +1685,7 @@ export default function TableDetailPage() {
             value={pageSize.toString()} 
             onValueChange={(value) => handlePageSizeChange(parseInt(value))}
           >
-            <SelectTrigger className="w-[120px] h-8 border-green-500/20 focus-visible:ring-green-500/30">
+            <SelectTrigger className="w-[120px] h-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
               <SelectValue placeholder="Rows per page" />
             </SelectTrigger>
             <SelectContent>
@@ -1642,14 +1693,16 @@ export default function TableDetailPage() {
               <SelectItem value="20">20 per page</SelectItem>
               <SelectItem value="50">50 per page</SelectItem>
               <SelectItem value="100">100 per page</SelectItem>
+              <SelectItem value="500">500 per page</SelectItem>
+              <SelectItem value="1000">1000 per page</SelectItem>
             </SelectContent>
           </Select>
           
-          <div className="flex items-center gap-1 bg-green-500/5 p-1 rounded-md border border-green-500/20">
+          <div className="flex items-center gap-1 bg-violet-500/5 p-1 rounded-md border border-violet-300 dark:border-violet-700">
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
+              className="h-7 w-7 p-0 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-700 dark:hover:text-violet-300" 
               onClick={() => handlePageChange(1)}
               disabled={page === 1}
             >
@@ -1659,7 +1712,7 @@ export default function TableDetailPage() {
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
+              className="h-7 w-7 p-0 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-700 dark:hover:text-violet-300" 
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
             >
@@ -1674,77 +1727,78 @@ export default function TableDetailPage() {
                   value={String(page)}
                   onValueChange={(value) => handlePageChange(parseInt(value))}
                 >
-                <SelectTrigger className="h-7 min-w-8 border-none px-2 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-300 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 mx-1.5 hover:bg-green-500/20 transition-colors">
-                  <SelectValue placeholder={page} />
-                  {/* <ChevronDown className="h-3.5 w-3.5 ml-0.5 opacity-70" /> */}
+                <SelectTrigger className="h-7 min-w-8 border-none px-2 py-0.5 rounded bg-violet-500/10 text-violet-700 dark:text-violet-300 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 mx-1.5 hover:bg-violet-500/20 transition-colors">
+                  <SelectValue placeholder={page.toLocaleString()} />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
                   {totalPages <= 100 ? (
                     // For reasonable number of pages, show all
                     Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                       <SelectItem key={pageNum} value={String(pageNum)}>
-                        {pageNum}
+                        {pageNum.toLocaleString()}
                       </SelectItem>
                     ))
                   ) : (
-                    // For large number of pages, show groups
+                    // For large number of pages, show strategic page numbers
                     <>
                       {/* First few pages */}
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map((pageNum) => (
                         <SelectItem 
-                          key={pageNum} 
+                          key={`first-${pageNum}`} 
                           value={String(pageNum)}
-                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                          className={pageNum === page ? "bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium" : ""}
                         >
-                          {pageNum}
+                          {pageNum.toLocaleString()}
                         </SelectItem>
                       ))}
                       
                       {/* Separator */}
-                      <SelectItem disabled value="separator-1" className="h-0 py-0 my-1 border-b border-muted/50">
-                        <span className="sr-only">Separator</span>
-                      </SelectItem>
+                      {totalPages > 10 && (
+                        <SelectItem disabled value="separator-1" className="h-0 py-0 my-1 border-b border-muted/50">
+                          <span className="sr-only">Separator</span>
+                        </SelectItem>
+                      )}
                       
-                      {/* Add sections in the middle */}
-                      {[10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 400, 500].filter(
-                        num => num > 5 && num < totalPages - 5
+                      {/* Strategic page numbers based on dataset size */}
+                      {generateStrategicPageNumbers(totalPages).filter(
+                        num => num > 5 && num < totalPages - 5 && Math.abs(num - page) > 5
                       ).map((pageNum) => (
                         <SelectItem 
-                          key={pageNum} 
+                          key={`strategic-${pageNum}`} 
                           value={String(pageNum)}
-                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                          className={pageNum === page ? "bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium" : ""}
                         >
-                          {pageNum}
+                          {pageNum.toLocaleString()}
                         </SelectItem>
                       ))}
                       
                       {/* Separator before current page section */}
-                      {page > 5 && page < totalPages - 5 && (
+                      {page > 10 && (
                         <SelectItem disabled value="separator-2" className="h-0 py-0 my-1 border-b border-muted/50">
                           <span className="sr-only">Separator</span>
                         </SelectItem>
                       )}
                       
-                      {/* Add pages around current page */}
+                      {/* Pages around current page */}
                       {page > 5 && page < totalPages - 5 && 
                         Array.from(
                           { length: 5 }, 
-                          (_, i) => Math.max(6, page - 2) + i
+                          (_, i) => page - 2 + i
                         )
-                        .filter(num => num > 5 && num < totalPages - 5)
+                        .filter(num => num > 0 && num <= totalPages)
                         .map((pageNum) => (
                           <SelectItem 
                             key={`current-${pageNum}`} 
                             value={String(pageNum)}
-                            className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                            className={pageNum === page ? "bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium" : ""}
                           >
-                            {pageNum}
+                            {pageNum.toLocaleString()}
                           </SelectItem>
                         ))
                       }
                       
                       {/* Separator before last pages */}
-                      {totalPages > 10 && (
+                      {page < totalPages - 10 && (
                         <SelectItem disabled value="separator-3" className="h-0 py-0 my-1 border-b border-muted/50">
                           <span className="sr-only">Separator</span>
                         </SelectItem>
@@ -1752,17 +1806,17 @@ export default function TableDetailPage() {
                       
                       {/* Last few pages */}
                       {Array.from(
-                        { length: 5 }, 
-                        (_, i) => totalPages - 4 + i
+                        { length: Math.min(5, totalPages) }, 
+                        (_, i) => totalPages - Math.min(4, totalPages - 1) + i
                       )
-                      .filter(num => num > 5)
+                      .filter(num => num > Math.max(page + 5, 5) && num <= totalPages)
                       .map((pageNum) => (
                         <SelectItem 
                           key={`last-${pageNum}`} 
                           value={String(pageNum)}
-                          className={pageNum === page ? "bg-green-500/10 text-green-700 dark:text-green-300 font-medium" : ""}
+                          className={pageNum === page ? "bg-violet-500/10 text-violet-700 dark:text-violet-300 font-medium" : ""}
                         >
-                          {pageNum}
+                          {pageNum.toLocaleString()}
                         </SelectItem>
                       ))}
                     </>
@@ -1771,13 +1825,13 @@ export default function TableDetailPage() {
               </Select>
               </span>
               <span className="text-muted-foreground mr-1">of</span>
-              <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-300 text-center">{totalPages}</span>
+              <span className="px-2 py-0.5 rounded bg-violet-500/10 text-violet-700 dark:text-violet-300 text-center">{totalPages.toLocaleString()}</span>
             </div>
             
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
+              className="h-7 w-7 p-0 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-700 dark:hover:text-violet-300" 
               onClick={() => handlePageChange(page + 1)}
               disabled={page >= totalPages}
             >
@@ -1787,7 +1841,7 @@ export default function TableDetailPage() {
             <Button 
               variant="ghost" 
               size="sm" 
-              className="h-7 w-7 p-0 hover:bg-green-500/10 hover:text-green-700" 
+              className="h-7 w-7 p-0 hover:bg-violet-100 dark:hover:bg-violet-900/30 hover:text-violet-700 dark:hover:text-violet-300" 
               onClick={() => handlePageChange(totalPages)}
               disabled={page >= totalPages}
             >
@@ -1798,6 +1852,80 @@ export default function TableDetailPage() {
         </div>
       </div>
     );
+  };
+
+  // Helper function to generate strategic page numbers for large datasets
+  const generateStrategicPageNumbers = (totalPages: number) => {
+    const strategicNumbers: number[] = [];
+    
+    // For very large datasets, use exponential distribution
+    if (totalPages > 10000) {
+      // Add powers of 10
+      for (let i = 1; i <= 6; i++) {
+        const num = Math.pow(10, i);
+        if (num < totalPages) {
+          strategicNumbers.push(num);
+        }
+      }
+      
+      // Add multiples of 10000
+      for (let i = 2; i <= 10; i++) {
+        const num = i * 10000;
+        if (num < totalPages - 10000) {
+          strategicNumbers.push(num);
+        }
+      }
+      
+      // Add multiples of 100000 for very large datasets
+      if (totalPages > 100000) {
+        for (let i = 2; i <= 10; i++) {
+          const num = i * 100000;
+          if (num < totalPages - 10000) {
+            strategicNumbers.push(num);
+          }
+        }
+      }
+      
+      // Add quarter, third, half points
+      strategicNumbers.push(Math.floor(totalPages / 4));
+      strategicNumbers.push(Math.floor(totalPages / 3));
+      strategicNumbers.push(Math.floor(totalPages / 2));
+      strategicNumbers.push(Math.floor(totalPages * 2 / 3));
+      strategicNumbers.push(Math.floor(totalPages * 3 / 4));
+    } 
+    // For medium-sized datasets
+    else if (totalPages > 1000) {
+      // Add hundreds
+      for (let i = 1; i <= 9; i++) {
+        const num = i * 1000;
+        if (num < totalPages - 1000) {
+          strategicNumbers.push(num);
+        }
+      }
+      
+      // Add quarter, third, half points
+      strategicNumbers.push(Math.floor(totalPages / 4));
+      strategicNumbers.push(Math.floor(totalPages / 2));
+      strategicNumbers.push(Math.floor(totalPages * 3 / 4));
+    }
+    // For smaller large datasets
+    else {
+      // Add hundreds
+      for (let i = 1; i <= 9; i++) {
+        const num = i * 100;
+        if (num < totalPages - 100) {
+          strategicNumbers.push(num);
+        }
+      }
+      
+      // Add quarter, half, three-quarter points
+      strategicNumbers.push(Math.floor(totalPages / 4));
+      strategicNumbers.push(Math.floor(totalPages / 2));
+      strategicNumbers.push(Math.floor(totalPages * 3 / 4));
+    }
+    
+    // Remove duplicates and sort
+    return [...new Set(strategicNumbers)].sort((a, b) => a - b);
   };
 
   // Toggle between Data Insights and Table
@@ -1811,15 +1939,15 @@ export default function TableDetailPage() {
       <TooltipProvider>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between py-2 mb-4 border-b border-primary/10">
+          <div className="flex items-center justify-between py-2 mb-4 border-b border-violet-200 dark:border-violet-800">
             <div className="flex items-center space-x-3">
-              <Button variant="ghost" size="sm" className="px-2 h-8 hover:bg-primary/5" onClick={() => router.back()}>
+              <Button variant="ghost" size="sm" className="px-2 h-8 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300" onClick={() => router.back()}>
                 <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 <span className="text-sm">Back</span>
               </Button>
-              <h1 className="text-2xl font-bold flex items-center">
-                <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center mr-2.5">
-                  <Database className="h-4.5 w-4.5 text-primary" />
+              <h1 className="text-2xl font-bold flex items-center bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent">
+                <div className="h-8 w-8 rounded-md bg-violet-500/10 flex items-center justify-center mr-2.5">
+                  <Database className="h-4.5 w-4.5 text-violet-600" />
                 </div>
                 {tableName}
               </h1>
@@ -1827,8 +1955,8 @@ export default function TableDetailPage() {
             <div className="flex items-center space-x-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 text-sm border-primary/20 hover:border-primary/40 hover:bg-primary/5" onClick={() => setShowSqlEditor(!showSqlEditor)}>
-                    <Code className="h-3.5 w-3.5 mr-1.5 text-primary" />
+                  <Button variant="outline" size="sm" className="h-8 text-sm border-violet-400/30 hover:border-violet-400/40 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300" onClick={() => setShowSqlEditor(!showSqlEditor)}>
+                    <Code className="h-3.5 w-3.5 mr-1.5 text-violet-600" />
                     {showSqlEditor ? "Hide" : "Show"} SQL Editor
                   </Button>
                 </TooltipTrigger>
@@ -1837,7 +1965,7 @@ export default function TableDetailPage() {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="sm" className="h-8 text-sm bg-primary/90 hover:bg-primary text-white dark:text-white" onClick={executeQuery} disabled={executing}>
+                  <Button size="sm" className="h-8 text-sm bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white" onClick={executeQuery} disabled={executing}>
                     {executing ? <Zap className="h-3.5 w-3.5 mr-1.5 animate-pulse" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
                     {executing ? "Running..." : "Run Query"}
                   </Button>
@@ -1847,7 +1975,7 @@ export default function TableDetailPage() {
 
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="sm" className="h-8 text-sm bg-primary hover:bg-primary/90 text-white dark:text-white" onClick={() => setShowSaveDialog(true)}>
+                  <Button size="sm" className="h-8 text-sm bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white" onClick={() => setShowSaveDialog(true)}>
                     <Save className="h-3.5 w-3.5 mr-1.5" />
                     {segmentId ? "Update Segment" : "Save Segment"}
                   </Button>
@@ -1862,18 +1990,18 @@ export default function TableDetailPage() {
             <div className="w-[30%] flex-shrink-0 flex flex-col h-full border-r border-primary/10 pr-4 overflow-hidden">
               {/* Filter Groups Header */}
               <Card className={cn("border mb-4 sticky top-0 z-10", gradientCardStyles({ variant: "primary" }))}>
-                <CardHeader className="py-3">
+                <CardHeader className="py-3 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center space-x-2 text-base">
-                      <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center">
-                        <Layers className="h-3.5 w-3.5 text-primary" />
+                    <CardTitle className="flex items-center space-x-2 text-base text-violet-900 dark:text-violet-100">
+                      <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center">
+                        <Layers className="h-3.5 w-3.5 text-violet-600" />
                       </div>
                       <span>Filter Groups</span>
                     </CardTitle>
                     <div className="flex items-center space-x-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button size="sm" className="h-7 w-7 p-0 rounded-full bg-primary hover:bg-primary/90" onClick={addFilterGroup}>
+                          <Button size="sm" className="h-7 w-7 p-0 rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white" onClick={addFilterGroup}>
                             <Plus className="h-3.5 w-3.5" />
                           </Button>
                         </TooltipTrigger>
@@ -1893,16 +2021,16 @@ export default function TableDetailPage() {
               {/* Filter Groups - Scrollable */}
               <div className="flex-1 overflow-y-auto pr-1 space-y-4 max-h-[calc(100vh-25rem)] custom-scrollbar pb-4">
                 {filterGroups.length === 0 ? (
-                  <Card className="border-dashed border-primary/20 bg-primary/5">
+                  <Card className="border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/10">
                     <CardContent className="text-center py-12">
-                      <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                        <FilterIcon className="h-8 w-8 text-primary opacity-70" />
+                      <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-violet-500/10 flex items-center justify-center">
+                        <FilterIcon className="h-8 w-8 text-violet-600 opacity-70" />
                       </div>
-                      <h3 className="font-medium mb-2">No filter groups yet</h3>
+                      <h3 className="font-medium mb-2 text-violet-900 dark:text-violet-100">No filter groups yet</h3>
                       <p className="text-sm text-muted-foreground mb-4">
                         Create your first filter group to start building your segment
                       </p>
-                      <Button onClick={addFilterGroup} className="bg-primary/90 hover:bg-primary text-white dark:text-white">
+                      <Button onClick={addFilterGroup} className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
                         <Plus className="h-4 w-4 mr-2" />
                         Add Filter Group
                       </Button>
@@ -1925,7 +2053,7 @@ export default function TableDetailPage() {
                             value={betweenGroupConditions[index] || "AND"}
                             onValueChange={(value) => updateBetweenGroupCondition(index, value)}
                           >
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className="w-24 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1942,22 +2070,22 @@ export default function TableDetailPage() {
               </div>
 
               {/* Timing Configuration - Sticky Bottom */}
-              <Card className="border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-blue-600/10 mt-4 sticky bottom-0">
+              <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20 mt-4 sticky bottom-0">
                 <CardHeader className="py-3">
-                  <CardTitle className="flex items-center text-base">
-                    <div className="h-6 w-6 rounded-md bg-blue-500/10 flex items-center justify-center mr-2">
-                      <CalendarIcon className="h-3.5 w-3.5 text-blue-500" />
+                  <CardTitle className="flex items-center text-base text-violet-900 dark:text-violet-100">
+                    <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
+                      <CalendarIcon className="h-3.5 w-3.5 text-violet-600" />
                     </div>
                     Execution Timing
                   </CardTitle>
-                  <CardDescription className="text-xs text-blue-500/70">
+                  <CardDescription className="text-xs text-violet-500/70">
                     Configure when this segment should be executed
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 pb-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
+                      <Label htmlFor="startDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
                         Start Date
                       </Label>
                       <DatePicker 
@@ -1966,7 +2094,7 @@ export default function TableDetailPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
+                      <Label htmlFor="endDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
                         End Date
                       </Label>
                       <DatePicker 
@@ -1977,7 +2105,7 @@ export default function TableDetailPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="startTime" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
+                      <Label htmlFor="startTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
                         Start Time
                       </Label>
                       <TimePicker
@@ -1986,7 +2114,7 @@ export default function TableDetailPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="endTime" className="text-xs mb-1 block text-blue-600/80 dark:text-blue-400/80 font-medium">
+                      <Label htmlFor="endTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
                         End Time
                       </Label>
                       <TimePicker
@@ -1998,8 +2126,8 @@ export default function TableDetailPage() {
                   
                   {(segmentData.startDate || segmentData.endDate || 
                     segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && (
-                    <div className="mt-3 p-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-xs">
-                      <div className="flex items-center text-blue-600 dark:text-blue-400">
+                    <div className="mt-3 p-2 rounded-md bg-violet-500/10 border border-violet-200 dark:border-violet-800 text-xs">
+                      <div className="flex items-center text-violet-700 dark:text-violet-300">
                         <Clock className="h-3.5 w-3.5 mr-1.5" />
                         <span className="font-medium">Execution schedule:</span>
                       </div>
@@ -2033,38 +2161,34 @@ export default function TableDetailPage() {
               )}
 
               {/* Data Preview */}
-              <Card className="border border-green-500/20 bg-gradient-to-br from-green-500/5 to-green-600/10">
+              <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20">
                 <CardHeader>
                   <div className="flex items-center justify-between flex-col sm:flex-row gap-2">
-                    <CardTitle className="flex items-center">
-                      <div className="h-6 w-6 rounded-md bg-green-500/10 flex items-center justify-center mr-2">
-                        <Eye className="h-3.5 w-3.5 text-green-500" />
+                    <CardTitle className="flex items-center text-violet-900 dark:text-violet-100">
+                      <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
+                        <Eye className="h-3.5 w-3.5 text-violet-600" />
                       </div>
                       Data Preview
                     </CardTitle>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                       <div className="flex flex-wrap items-center justify-center gap-3">
-                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.total}</span>
+                        <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                          <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{pagination.total}</span>
                           <span className="text-xs text-muted-foreground">Overall Rows</span>
                         </div>
-                        {/* <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{pagination.page || 0}</span>
-                          <span className="text-xs text-muted-foreground">current page</span>
-                        </div> */}
-                        <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                          <span className="text-lg font-semibold text-green-700 dark:text-green-300">{columns?.length || 0}</span>
+                        <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                          <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{columns?.length || 0}</span>
                           <span className="text-xs text-muted-foreground">Columns</span>
                         </div>
                         {hasEmailColumn && (
-                          <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-md border border-green-500/20">
-                            <span className="text-lg font-semibold text-green-700 dark:text-green-300">{uniqueEmails !== null ? uniqueEmails : 0}</span>
+                          <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{uniqueEmails !== null ? uniqueEmails : 0}</span>
                             <span className="text-xs text-muted-foreground">Unique emails</span>
                           </div>
                         )}
                         {enabledFilterCount > 0 && (
-                          <div className="flex flex-col items-center px-4 py-2 bg-primary/10 rounded-md border border-primary/20">
-                            <span className="text-lg font-semibold text-primary">{enabledFilterCount}</span>
+                          <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{enabledFilterCount}</span>
                             <span className="text-xs text-muted-foreground">
                               filter group{enabledFilterCount !== 1 ? "s" : ""}
                             </span>
@@ -2082,9 +2206,9 @@ export default function TableDetailPage() {
                               const columnNames = columns.map(col => col.name);
                               dataService.exportTableDataToCSV(tableData, columnNames, filename);
                             }}
-                            className="flex items-center gap-1 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/5"
+                            className="flex items-center gap-1 border-violet-300 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
                           >
-                            <Download className="h-4 w-4 text-green-500" />
+                            <Download className="h-4 w-4 text-violet-600" />
                             Export Page
                           </Button>
                         </div>
@@ -2094,12 +2218,29 @@ export default function TableDetailPage() {
                 </CardHeader>
                 <CardContent className="p-0 sm:p-0">
                     <div className="space-y-4">
-                      <div className="rounded-md border border-green-500/20 overflow-hidden relative">
+                      <div className="rounded-md border border-violet-200 dark:border-violet-800 overflow-hidden relative">
                         {(tableLoading || executing) && (
                           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="h-10 w-10 rounded-full border-4 border-green-500/30 border-t-green-500 animate-spin"></div>
-                              <p className="text-sm font-medium text-green-700 dark:text-green-300">Loading data...</p>
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="relative">
+                                {/* Spinner with gradient */}
+                                <div className="h-16 w-16 rounded-full border-4 border-violet-100 dark:border-violet-800/30 relative">
+                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
+                                  <div className="absolute inset-1 rounded-full border-4 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.2s] animate-reverse"></div>
+                                  <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-500/20 to-indigo-500/20 animate-pulse"></div>
+                                </div>
+                                
+                                {/* Progress bar animation */}
+                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-1 bg-violet-100 dark:bg-violet-800/30 rounded-full overflow-hidden">
+                                  <div className="h-full w-10 bg-gradient-to-r from-violet-600 to-indigo-500 rounded-full animate-progress"></div>
+                                </div>
+                              </div>
+                              <div className="text-center space-y-1">
+                                <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                                  {executing ? "Executing query..." : "Loading data..."}
+                                </p>
+                                <p className="text-xs text-muted-foreground">This may take a moment</p>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -2114,11 +2255,11 @@ export default function TableDetailPage() {
 
           {/* Save Segment Dialog */}
           <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-            <DialogContent className="bg-gradient-to-br from-background to-muted/30 border-primary/20">
+            <DialogContent className="bg-gradient-to-br from-white to-violet-50 dark:from-gray-950 dark:to-violet-950/30 border-violet-200 dark:border-violet-800">
               <DialogHeader>
-                <DialogTitle className="flex items-center">
-                  <div className="h-7 w-7 rounded-md bg-secondary/10 flex items-center justify-center mr-2">
-                    <Save className="h-4 w-4 text-secondary" />
+                <DialogTitle className="flex items-center text-violet-900 dark:text-violet-100">
+                  <div className="h-7 w-7 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
+                    <Save className="h-4 w-4 text-violet-600" />
                   </div>
                   {segmentId ? "Update Segment" : "Save Segment"}
                 </DialogTitle>
@@ -2128,46 +2269,46 @@ export default function TableDetailPage() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="segmentName">Segment Name</Label>
+                  <Label htmlFor="segmentName" className="text-violet-700 dark:text-violet-300">Segment Name</Label>
                   <Input
                     id="segmentName"
                     value={segmentData.name}
                     onChange={(e) => setSegmentData({ ...segmentData, name: e.target.value })}
                     placeholder="Enter segment name"
-                    className="border-primary/20 focus-visible:ring-primary/30"
+                    className="border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="segmentDescription">Description</Label>
+                  <Label htmlFor="segmentDescription" className="text-violet-700 dark:text-violet-300">Description</Label>
                   <Textarea
                     id="segmentDescription"
                     value={segmentData.description}
                     onChange={(e) => setSegmentData({ ...segmentData, description: e.target.value })}
                     placeholder="Describe what this segment represents"
                     rows={3}
-                    className="border-primary/20 focus-visible:ring-primary/30"
+                    className="border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
                   />
                 </div>
-                <Separator className="bg-primary/10" />
-                <div className="text-sm space-y-2 p-3 rounded-md bg-primary/5 border border-primary/10">
+                <Separator className="bg-violet-200 dark:bg-violet-800" />
+                <div className="text-sm space-y-2 p-3 rounded-md bg-violet-50/50 dark:bg-violet-900/10 border border-violet-200 dark:border-violet-800">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Table:</span>
-                    <span className="font-medium">{tableName}</span>
+                    <span className="font-medium text-violet-700 dark:text-violet-300">{tableName}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Filter Groups:</span>
-                    <span className="font-medium">
+                    <span className="font-medium text-violet-700 dark:text-violet-300">
                       {enabledFilterCount} active, {filterGroups.length} total
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Filters:</span>
-                    <span className="font-medium">{totalFilterCount}</span>
+                    <span className="font-medium text-violet-700 dark:text-violet-300">{totalFilterCount}</span>
                   </div>
                   {(segmentData.startDate || segmentData.endDate) && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Execution Period:</span>
-                      <span className="font-medium">
+                      <span className="font-medium text-violet-700 dark:text-violet-300">
                         {segmentData.startDate || "No start"} to {segmentData.endDate || "No end"}
                       </span>
                     </div>
@@ -2175,10 +2316,10 @@ export default function TableDetailPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="border-muted-foreground/20">
+                <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="border-violet-300 dark:border-violet-700 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300">
                   Cancel
                 </Button>
-                <Button onClick={saveSegment} disabled={saving} className="bg-primary hover:bg-primary/90 text-white dark:text-white">
+                <Button onClick={saveSegment} disabled={saving} className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
                   {saving ? (segmentId ? "Updating..." : "Saving...") : segmentId ? "Update Segment" : "Save Segment"}
                 </Button>
               </DialogFooter>

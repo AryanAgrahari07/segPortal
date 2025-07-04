@@ -34,11 +34,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background transition-colors">
       {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="border-b border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50/80 to-indigo-50/80 dark:from-violet-950/80 dark:to-indigo-950/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="w-[100%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-bold">Segment Manager</h1>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">Segment Manager</h1>
               <nav className="flex space-x-4">
                 {navigation.map((item) => {
                   if (!item.show) return null
@@ -49,8 +49,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       href={item.href}
                       className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                         isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                          ? "bg-gradient-to-r from-violet-600 to-indigo-500 text-white"
+                          : "text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100 hover:bg-violet-100 dark:hover:bg-violet-900/30"
                       }`}
                     >
                       <item.icon className="h-4 w-4 mr-2" />
@@ -61,9 +61,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </nav>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">Welcome, {user?.first_name}</span>
+              <span className="text-sm text-violet-700 dark:text-violet-300">Welcome, {user?.first_name}</span>
               <ThemeToggle />
-              <Button variant="ghost" size="sm" onClick={logout}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={logout}
+                className="hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+              >
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </Button>

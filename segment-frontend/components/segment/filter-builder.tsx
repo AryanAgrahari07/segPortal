@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Hash, Type, ToggleLeft, Search, Loader2, ChevronDown } from "lucide-react"
+import { Trash2, Hash, Type, ToggleLeft, Search, Loader2, ChevronDown, Clock } from "lucide-react"
+import { Calendar as CalendarIcon } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   Command, 
@@ -22,6 +23,11 @@ import {
 } from "@/components/ui/popover"
 import { dataService } from "@/services/data-service"
 import { useParams, useSearchParams } from "next/navigation"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+
+// Import the Calendar component
+import { Calendar } from "@/components/ui/calendar"
 
 interface Column {
   name: string
@@ -45,7 +51,7 @@ interface FilterBuilderProps {
   disabled?: boolean
 }
 
-// Define operators function at the top level, outside of any component
+// Define operators function at the top level
   const getOperatorsForType = (type: string) => {
     switch (type) {
       case "STRING":
@@ -151,6 +157,237 @@ function throttle<T extends (...args: any[]) => any>(fn: T, delay: number): (...
       }, delay - timeSinceLastCall);
     }
   };
+}
+
+// Add DatePicker component for timestamp fields
+function DatePicker({ 
+  date, 
+  setDate, 
+  className 
+}: { 
+  date: string, 
+  setDate: (date: string) => void,
+  className?: string 
+}) {
+  // Parse the input date string to a Date object, or use current date if empty/invalid
+  const parseDateString = (dateStr: string): Date => {
+    if (!dateStr) return new Date();
+    
+    // Handle YYYY-MM-DD format specifically to avoid timezone issues
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      // Create date using local timezone (months are 0-indexed in JS Date)
+      return new Date(year, month - 1, day, 12, 0, 0);
+    }
+    
+    const parsed = new Date(dateStr);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
+
+  // Initialize state with parsed date
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    date ? parseDateString(date) : undefined
+  );
+   
+  // Keep the visible month in sync with selected date
+  const [currentMonth, setCurrentMonth] = useState<Date>(
+    date ? parseDateString(date) : new Date()
+  );
+  
+  // Generate years for dropdown (10 years before and after current year)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
+  // Handle date selection - critical fix for timezone issues
+  const handleSelect = (newDate: Date | undefined) => {
+    setSelectedDate(newDate);
+    
+    if (newDate) {
+      // Format as YYYY-MM-DD using local timezone to avoid date shifts
+      const year = newDate.getFullYear();
+      const month = String(newDate.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+      const day = String(newDate.getDate()).padStart(2, '0');
+      
+      const formattedDate = `${year}-${month}-${day}`;
+      setDate(formattedDate);
+      
+      // Also update the current month to match the selected date
+      setCurrentMonth(newDate);
+    }
+  };
+
+  // Handle year change
+  const handleYearChange = (year: string) => {
+    // Create a new date with the selected year but preserve month and day
+    const newMonth = new Date(currentMonth);
+    newMonth.setFullYear(parseInt(year));
+    setCurrentMonth(newMonth);
+  };
+
+  // Format date for display - use shorter month format to prevent overflow
+  const formatDate = (date: Date): string => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short', // Use short month format (Feb instead of February)
+        day: 'numeric'
+      }).format(date);
+    } catch (e) {
+      console.error("Date formatting error:", e);
+      return "Invalid date";
+    }
+  };
+
+  // Update internal state when external date prop changes
+  useEffect(() => {
+    if (date) {
+      const parsedDate = parseDateString(date);
+      setSelectedDate(parsedDate);
+      setCurrentMonth(parsedDate);
+    } else {
+      setSelectedDate(undefined);
+    }
+  }, [date]);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            "w-full justify-start text-left font-normal h-9 border-purple-500/20 focus-visible:ring-purple-500/30 truncate",
+            !date && "text-muted-foreground",
+            className
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0 text-purple-500" />
+          <span className="truncate">
+            {selectedDate ? formatDate(selectedDate) : "Pick a date"}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <div className="p-3 border-b border-border/20 flex justify-between items-center">
+          <span className="text-sm font-medium">Go to year</span>
+          <Select 
+            value={currentMonth.getFullYear().toString()} 
+            onValueChange={handleYearChange}
+          >
+            <SelectTrigger className="h-8 w-[5rem] px-2 text-xs border-purple-500/20 focus-visible:ring-purple-500/30">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((year) => (
+                <SelectItem key={year} value={year.toString()} className="text-xs">
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleSelect}
+          month={currentMonth}
+          onMonthChange={setCurrentMonth}
+          initialFocus
+          className="border-none shadow-none"
+          classNames={{
+            caption: "flex justify-center py-2 relative items-center",
+            caption_label: "text-sm font-medium",
+            cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+            day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-purple-100 dark:hover:bg-purple-900/20",
+            day_selected: "bg-purple-500 text-white hover:bg-purple-400 hover:text-white focus:bg-purple-500 focus:text-white",
+            day_today: "bg-purple-100 text-purple-700 dark:bg-purple-800/30 dark:text-purple-300",
+            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-purple-500"
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Add TimePicker component for timestamp fields
+function TimePicker({
+  time,
+  setTime,
+  className
+}: {
+  time: string,
+  setTime: (time: string) => void,
+  className?: string
+}) {
+  // Parse current time into hours and minutes, with fallback to 00:00
+  const parseTimeString = (timeStr: string): [number, number] => {
+    if (!timeStr) return [0, 0];
+    const parts = timeStr.split(':').map(Number);
+    const hours = !isNaN(parts[0]) && parts[0] >= 0 && parts[0] < 24 ? parts[0] : 0;
+    const minutes = !isNaN(parts[1]) && parts[1] >= 0 && parts[1] < 60 ? parts[1] : 0;
+    return [hours, minutes];
+  };
+
+  const [hours, minutes] = parseTimeString(time);
+  
+  // Format numbers with leading zeros
+  const formatNumber = (num: number, digits: number = 2): string => {
+    return num.toString().padStart(digits, '0');
+  };
+
+  // Handle hour and minute changes
+  const handleHourChange = (newHour: string) => {
+    const hourNum = parseInt(newHour, 10);
+    if (!isNaN(hourNum) && hourNum >= 0 && hourNum < 24) {
+      setTime(`${formatNumber(hourNum)}:${formatNumber(minutes)}`);
+    }
+  };
+
+  const handleMinuteChange = (newMinute: string) => {
+    const minuteNum = parseInt(newMinute, 10);
+    if (!isNaN(minuteNum) && minuteNum >= 0 && minuteNum < 60) {
+      setTime(`${formatNumber(hours)}:${formatNumber(minuteNum)}`);
+    }
+  };
+
+  // Generate hour and minute options
+  const hourOptions = Array.from({ length: 24 }, (_, i) => formatNumber(i));
+  const minuteOptions = Array.from({ length: 60 }, (_, i) => formatNumber(i));
+
+  return (
+    <div className={cn("flex items-center gap-1", className)}>
+      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-purple-500/20 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 focus-visible:ring-offset-2">
+        <Clock className="mr-2 h-4 w-4 flex-shrink-0 text-purple-500" />
+        <div className="flex items-center">
+          <Select value={formatNumber(hours)} onValueChange={handleHourChange}>
+            <SelectTrigger className="w-[3.5rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+              <SelectValue placeholder="HH" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {hourOptions.map((hour) => (
+                <SelectItem key={hour} value={hour}>
+                  {hour}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="mx-1 text-purple-500">:</span>
+          <Select value={formatNumber(minutes)} onValueChange={handleMinuteChange}>
+            <SelectTrigger className="w-[3.5rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+              <SelectValue placeholder="MM" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {minuteOptions.map((minute) => (
+                <SelectItem key={minute} value={minute}>
+                  {minute}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = false }: FilterBuilderProps) {
@@ -380,7 +617,7 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
       case "DECIMAL":
         return "number"
       case "TIMESTAMP":
-        return "datetime-local"
+        return "date"
       default:
         return "text"
     }
@@ -419,7 +656,7 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
       case "DECIMAL":
         return <Hash className="h-3 w-3" />
       case "TIMESTAMP":
-        return <Calendar className="h-3 w-3" />
+        return <CalendarIcon className="h-3 w-3" />
       case "BOOLEAN":
         return <ToggleLeft className="h-3 w-3" />
       default:
@@ -581,6 +818,70 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
     );
   }
 
+  // Add a function to handle timestamp inputs specifically
+  const renderTimestampInput = (value: string, onChange: (value: string) => void, placeholder: string) => {
+    // Extract date and time parts with better error handling
+    const parseDateTime = (dateTimeStr: string): [string, string] => {
+      if (!dateTimeStr) return ["", "00:00"];
+      
+      // Handle ISO format with T separator
+      if (dateTimeStr.includes('T')) {
+        const [datePart, timePart] = dateTimeStr.split('T');
+        return [datePart, timePart.split(':').slice(0, 2).join(':')];
+      }
+      
+      // Handle date-only format
+      if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return [dateTimeStr, "00:00"];
+      }
+      
+      // Handle other formats or return empty
+      try {
+        // Use local date parsing to avoid timezone issues
+        const date = new Date(dateTimeStr);
+        if (!isNaN(date.getTime())) {
+          // Format as YYYY-MM-DD using local timezone
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          
+          return [
+            `${year}-${month}-${day}`,
+            `${hours}:${minutes}`
+          ];
+        }
+      } catch (e) {
+        console.error("Date parsing error:", e);
+      }
+      
+      return ["", "00:00"];
+    };
+    
+    const [datePart, timePart] = parseDateTime(value);
+    
+    return (
+      <div className="flex flex-col gap-2">
+        <DatePicker 
+          date={datePart} 
+          setDate={(date) => {
+            // Preserve time part when changing date
+            onChange(`${date}T${timePart || "00:00"}`);
+          }}
+        />
+        <TimePicker 
+          time={timePart} 
+          setTime={(time) => {
+            // Preserve date part when changing time
+            const date = datePart || new Date().toISOString().split('T')[0];
+            onChange(`${date}T${time}`);
+          }}
+        />
+      </div>
+    );
+  };
+
   return (
     <TooltipProvider>
       <div
@@ -606,9 +907,6 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
                         {getColumnIcon(selectedColumn?.type || "STRING")}
                       </span>
                       <span className="truncate">{filter.column}</span>
-                      <Badge variant="outline" className="text-xs whitespace-nowrap flex-shrink-0 ml-1">
-                        {selectedColumn?.type || "STRING"}
-                      </Badge>
                     </div>
                   ) : (
                     "Select column"
@@ -689,6 +987,25 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
               <div className="h-9 flex items-center text-sm text-muted-foreground px-3 bg-muted rounded-md max-w-[280px]">
                 No value needed
               </div>
+            ) : needsSecondValue && selectedColumn?.type === "TIMESTAMP" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-[600px]">
+                <div className="space-y-2">
+                  <Label className="text-xs block text-purple-600/80 dark:text-purple-400/80 font-medium">From</Label>
+                  {renderTimestampInput(
+                    filter.value,
+                    (value) => onUpdate({ value }),
+                    "From"
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs block text-purple-600/80 dark:text-purple-400/80 font-medium">To</Label>
+                  {renderTimestampInput(
+                    filter.value2 || "",
+                    (value) => onUpdate({ value2: value }),
+                    "To"
+                  )}
+                </div>
+              </div>
             ) : needsSecondValue ? (
               <div className="grid grid-cols-2 gap-2 max-w-[280px]">
                 <Input
@@ -707,6 +1024,14 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
                   className="h-9 text-sm w-full"
                   disabled={disabled}
                 />
+              </div>
+            ) : selectedColumn?.type === "TIMESTAMP" ? (
+              <div className="max-w-[280px]">
+                {renderTimestampInput(
+                  filter.value,
+                  (value) => onUpdate({ value }),
+                  getPlaceholder(selectedColumn?.type || "STRING", filter.operator)
+                )}
               </div>
             ) : selectedColumn?.type === "BOOLEAN" ? (
               <div className="max-w-[280px]">
@@ -747,22 +1072,20 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
           </div>
 
           {/* Remove Button */}
-          <div className="flex-shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onRemove}
-                  disabled={disabled}
-                  className="h-9 w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Remove filter</TooltipContent>
-            </Tooltip>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRemove}
+                className="h-9 w-9 p-0 text-destructive hover:text-destructive"
+                disabled={disabled}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove filter</TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </TooltipProvider>

@@ -145,9 +145,33 @@ export default function SegmentDetailPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
-            <p>Loading segment data...</p>
+          <div className="text-center space-y-6">
+            <div className="relative">
+              <div className="w-24 h-24 mx-auto relative">
+                {/* Outer ring animation */}
+                <div className="absolute inset-0 rounded-full border-8 border-violet-200 dark:border-violet-800/40"></div>
+                <div className="absolute inset-0 rounded-full border-8 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
+                
+                {/* Middle ring animation - opposite direction */}
+                <div className="absolute inset-2 rounded-full border-6 border-violet-100 dark:border-violet-900/30"></div>
+                <div className="absolute inset-2 rounded-full border-6 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.5s] animate-reverse"></div>
+                
+                {/* Inner pulsing circle */}
+                <div className="absolute inset-5 rounded-full bg-gradient-to-br from-violet-600 to-indigo-500 animate-pulse"></div>
+                
+                {/* Icon */}
+                <Filter className="h-8 w-8 text-white absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-md" />
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-lg font-medium bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent">Loading segment data...</p>
+              <div className="flex justify-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-violet-600 animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></span>
+              </div>
+            </div>
           </div>
         </div>
       </DashboardLayout>
@@ -159,10 +183,13 @@ export default function SegmentDetailPage() {
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Segment not found</h3>
+            <Filter className="h-12 w-12 mx-auto mb-4 text-violet-500" />
+            <h3 className="text-lg font-semibold mb-2 text-violet-900 dark:text-violet-100">Segment not found</h3>
             <p className="text-muted-foreground mb-4">The requested segment could not be found</p>
-            <Button onClick={() => router.push("/dashboard?tab=segments")}>
+            <Button 
+              onClick={() => router.push("/dashboard?tab=segments")}
+              className="border-violet-400/30 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Segments
             </Button>
@@ -182,13 +209,18 @@ export default function SegmentDetailPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard?tab=segments")}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => router.push("/dashboard?tab=segments")}
+              className="hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
             <div>
-              <h1 className="text-3xl font-bold flex items-center">
-                <Filter className="h-8 w-8 mr-3 text-primary" />
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent flex items-center">
+                <Filter className="h-8 w-8 mr-3 text-violet-600" />
                 {segment.segment_name}
               </h1>
               <p className="text-muted-foreground">{segment.description || "No description provided"}</p>
@@ -202,13 +234,18 @@ export default function SegmentDetailPage() {
                   checked={segment.status === 'active'}
                   onCheckedChange={toggleSegmentStatus}
                   disabled={isToggling}
+                  className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-violet-600 data-[state=checked]:to-indigo-500"
                 />
-                <Label htmlFor="segment-status">
+                <Label htmlFor="segment-status" className="text-violet-700 dark:text-violet-300">
                   {segment.status === 'active' ? 'Active' : 'Disabled'}
                 </Label>
               </div>
             )}
-            <Button variant="outline" onClick={editSegment}>
+            <Button 
+              variant="outline" 
+              onClick={editSegment}
+              className="border-violet-400/30 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+            >
               <Edit className="h-4 w-4 mr-2" />
               Edit Segment
             </Button>
@@ -216,7 +253,11 @@ export default function SegmentDetailPage() {
                <Play className="h-4 w-4 mr-2" /> Execute Segment
             </Button> */}
             {canManageSegment && (
-              <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+              <Button 
+                variant="destructive" 
+                onClick={() => setShowDeleteDialog(true)}
+                className="bg-red-500 hover:bg-red-600"
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </Button>
@@ -226,27 +267,29 @@ export default function SegmentDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Segment Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Segment Details</CardTitle>
+          <Card className="border-violet-200 dark:border-violet-800">
+            <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+              <CardTitle className="text-violet-900 dark:text-violet-100">Segment Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Target Table</h3>
-                <p className="font-medium">{segment.segment_config?.target_table || "Unknown"}</p>
+                <p className="font-medium text-violet-700 dark:text-violet-300">{segment.segment_config?.target_table || "Unknown"}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
                 <Badge 
                   variant={segment.status === "active" ? "default" : "secondary"}
-                  className={segment.status === "active" ? "bg-green-500" : "bg-gray-500"}
+                  className={segment.status === "active" 
+                    ? "bg-gradient-to-r from-emerald-500 to-green-500" 
+                    : "bg-gradient-to-r from-slate-400 to-gray-500"}
                 >
                   {segment.status}
                 </Badge>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Created By</h3>
-                <p>{segment.created_by}</p>
+                <p className="text-indigo-700 dark:text-indigo-300">{segment.created_by}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Created At</h3>
@@ -254,7 +297,7 @@ export default function SegmentDetailPage() {
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Filter Summary</h3>
-                <p>
+                <p className="text-violet-700 dark:text-violet-300">
                   {filterGroupCount} filter groups with {filterCount} total filters
                 </p>
               </div>
@@ -262,38 +305,38 @@ export default function SegmentDetailPage() {
           </Card>
 
           {/* Filter Groups */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Filter Groups</CardTitle>
+          <Card className="md:col-span-2 border-violet-200 dark:border-violet-800">
+            <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+              <CardTitle className="text-violet-900 dark:text-violet-100">Filter Groups</CardTitle>
               <CardDescription>
                 This segment contains {filterGroupCount} filter groups with {filterCount} total filters
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               {segment.filter_groups?.length > 0 ? (
                 segment.filter_groups.map((group: any, index: number) => (
                   <div key={group.id || index} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-medium">{group.group_name}</h3>
+                      <h3 className="font-medium text-violet-700 dark:text-violet-300">{group.group_name}</h3>
                       <div className="flex items-center gap-2">
                         {group.not && (
-                          <Badge variant="destructive">NOT</Badge>
+                          <Badge variant="destructive" className="bg-red-500">NOT</Badge>
                         )}
-                        <Badge variant={group.not ? "outline" : "default"}>
+                        <Badge variant={group.not ? "outline" : "default"} className={group.not ? "border-violet-300 dark:border-violet-700" : "bg-gradient-to-r from-violet-600 to-indigo-500"}>
                           {group.group_condition}
                         </Badge>
                       </div>
                     </div>
-                    <div className="border rounded-md p-4 space-y-2">
+                    <div className="border rounded-md p-4 space-y-2 border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10">
                       {group.filters?.length > 0 ? (
                         group.filters.map((filter: any, filterIndex: number) => (
                           <div key={filter.id || filterIndex} className="text-sm">
                             <div className="flex items-center justify-between">
-                              <span className="font-medium">{filter.column_name}</span>
+                              <span className="font-medium text-violet-700 dark:text-violet-300">{filter.column_name}</span>
                               <span className="text-muted-foreground">{filter.column_data_type}</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <Badge variant="outline">{filter.filter_operator}</Badge>
+                              <Badge variant="outline" className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">{filter.filter_operator}</Badge>
                               <span>
                                 {Array.isArray(filter.filter_value) 
                                   ? filter.filter_value.join(', ')
@@ -308,7 +351,7 @@ export default function SegmentDetailPage() {
                             </div>
                             {filterIndex < group.filters.length - 1 && (
                               <div className="flex items-center justify-center py-1">
-                                <Badge variant="secondary" className="text-xs">
+                                <Badge variant="secondary" className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
                                   {group.group_condition}
                                 </Badge>
                               </div>
@@ -321,7 +364,7 @@ export default function SegmentDetailPage() {
                     </div>
                     {index < segment.filter_groups.length - 1 && (
                       <div className="flex items-center justify-center py-2">
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
                           {segment.segment_config && (segment.segment_config as any).groupConditions?.[index] || 
                            group.between_group_condition || 
                            "AND"}
@@ -337,23 +380,23 @@ export default function SegmentDetailPage() {
           </Card>
 
           {/* SQL Preview */}
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <CardTitle>Generated SQL</CardTitle>
+          <Card className="md:col-span-3 border-violet-200 dark:border-violet-800">
+            <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+              <CardTitle className="text-violet-900 dark:text-violet-100">Generated SQL</CardTitle>
             </CardHeader>
-            <CardContent>
-              <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
+            <CardContent className="pt-6">
+              <pre className="bg-violet-50/50 dark:bg-violet-900/10 p-4 rounded-md overflow-x-auto text-sm border border-violet-100 dark:border-violet-800/30">
                 {segment.generated_sql || "No SQL generated"}
               </pre>
             </CardContent>
             {segment.custom_sql && (
               <>
-                <Separator />
-                <CardHeader>
-                  <CardTitle>Custom SQL</CardTitle>
+                <Separator className="bg-violet-200 dark:bg-violet-800" />
+                <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+                  <CardTitle className="text-violet-900 dark:text-violet-100">Custom SQL</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">{segment.custom_sql}</pre>
+                <CardContent className="pt-6">
+                  <pre className="bg-violet-50/50 dark:bg-violet-900/10 p-4 rounded-md overflow-x-auto text-sm border border-violet-100 dark:border-violet-800/30">{segment.custom_sql}</pre>
                 </CardContent>
               </>
             )}
@@ -362,20 +405,20 @@ export default function SegmentDetailPage() {
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
+          <AlertDialogContent className="bg-gradient-to-br from-white to-violet-50 dark:from-gray-950 dark:to-violet-950/30 border-violet-200 dark:border-violet-800">
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogTitle className="text-violet-900 dark:text-violet-100">Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This will delete the segment &quot;{segment.segment_name}&quot;. This action cannot be
                 undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="border-violet-300 dark:border-violet-700">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={deleteSegment}
                 disabled={deleting}
-                className="bg-destructive text-destructive-foreground"
+                className="bg-red-500 hover:bg-red-600 text-white"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </AlertDialogAction>

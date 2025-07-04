@@ -237,7 +237,7 @@ export default function AdminPage() {
     
     return (
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pb-2">
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-violet-600 dark:text-violet-400">
           Showing {startRecord}-{endRecord} of {filteredUsers.length} users
         </div>
         <div className="flex items-center gap-2">
@@ -245,10 +245,10 @@ export default function AdminPage() {
             value={pageSize.toString()} 
             onValueChange={(value) => handlePageSizeChange(parseInt(value))}
           >
-            <SelectTrigger className="w-[110px] h-8">
-              <SelectValue placeholder="Rows per page" />
+            <SelectTrigger className="w-[110px] h-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
+              <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="border-violet-200 dark:border-violet-800">
               <SelectItem value="5">5 per page</SelectItem>
               <SelectItem value="10">10 per page</SelectItem>
               <SelectItem value="20">20 per page</SelectItem>
@@ -261,28 +261,36 @@ export default function AdminPage() {
               <PaginationItem>
                 <PaginationPrevious 
                   onClick={() => handlePageChange(currentPage - 1)}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  className={currentPage === 1 
+                    ? "pointer-events-none opacity-50" 
+                    : "cursor-pointer text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"}
                 />
               </PaginationItem>
               
               {/* First page */}
               {currentPage > 2 && (
                 <PaginationItem>
-                  <PaginationLink onClick={() => handlePageChange(1)}>1</PaginationLink>
+                  <PaginationLink 
+                    onClick={() => handlePageChange(1)}
+                    className="text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"
+                  >1</PaginationLink>
                 </PaginationItem>
               )}
               
               {/* Ellipsis */}
               {currentPage > 3 && (
                 <PaginationItem>
-                  <PaginationEllipsis />
+                  <PaginationEllipsis className="text-violet-600 dark:text-violet-400" />
                 </PaginationItem>
               )}
               
               {/* Previous page */}
               {currentPage > 1 && (
                 <PaginationItem>
-                  <PaginationLink onClick={() => handlePageChange(currentPage - 1)}>
+                  <PaginationLink 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    className="text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"
+                  >
                     {currentPage - 1}
                   </PaginationLink>
                 </PaginationItem>
@@ -290,13 +298,19 @@ export default function AdminPage() {
               
               {/* Current page */}
               <PaginationItem>
-                <PaginationLink isActive>{currentPage}</PaginationLink>
+                <PaginationLink 
+                  isActive
+                  className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white"
+                >{currentPage}</PaginationLink>
               </PaginationItem>
               
               {/* Next page */}
               {currentPage < totalPages && (
                 <PaginationItem>
-                  <PaginationLink onClick={() => handlePageChange(currentPage + 1)}>
+                  <PaginationLink 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    className="text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"
+                  >
                     {currentPage + 1}
                   </PaginationLink>
                 </PaginationItem>
@@ -305,14 +319,17 @@ export default function AdminPage() {
               {/* Ellipsis */}
               {currentPage < totalPages - 2 && (
                 <PaginationItem>
-                  <PaginationEllipsis />
+                  <PaginationEllipsis className="text-violet-600 dark:text-violet-400" />
                 </PaginationItem>
               )}
               
               {/* Last page */}
               {currentPage < totalPages - 1 && totalPages > 1 && (
                 <PaginationItem>
-                  <PaginationLink onClick={() => handlePageChange(totalPages)}>
+                  <PaginationLink 
+                    onClick={() => handlePageChange(totalPages)}
+                    className="text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"
+                  >
                     {totalPages}
                   </PaginationLink>
                 </PaginationItem>
@@ -321,7 +338,9 @@ export default function AdminPage() {
               <PaginationItem>
                 <PaginationNext 
                   onClick={() => handlePageChange(currentPage + 1)}
-                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  className={currentPage >= totalPages 
+                    ? "pointer-events-none opacity-50" 
+                    : "cursor-pointer text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/30 hover:text-violet-800 dark:hover:text-violet-200"}
                 />
               </PaginationItem>
             </PaginationContent>
@@ -335,7 +354,34 @@ export default function AdminPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <div className="text-center space-y-6">
+            <div className="relative">
+              <div className="w-24 h-24 mx-auto relative">
+                {/* Outer ring animation */}
+                <div className="absolute inset-0 rounded-full border-8 border-violet-200 dark:border-violet-800/40"></div>
+                <div className="absolute inset-0 rounded-full border-8 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
+                
+                {/* Middle ring animation - opposite direction */}
+                <div className="absolute inset-2 rounded-full border-6 border-violet-100 dark:border-violet-900/30"></div>
+                <div className="absolute inset-2 rounded-full border-6 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.5s] animate-reverse"></div>
+                
+                {/* Inner pulsing circle */}
+                <div className="absolute inset-5 rounded-full bg-gradient-to-br from-violet-600 to-indigo-500 animate-pulse"></div>
+                
+                {/* Icon */}
+                <Users className="h-8 w-8 text-white absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-md" />
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-lg font-medium bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent">Loading user data...</p>
+              <div className="flex justify-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-violet-600 animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></span>
+              </div>
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     )
@@ -346,12 +392,12 @@ export default function AdminPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">User Management</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-400 bg-clip-text text-transparent">User Management</h1>
             <p className="text-muted-foreground">Manage users and their permissions</p>
           </div>
           <div className="flex gap-2">
             <Link href="/admin/column-visibility">
-              <Button>
+              <Button className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
                 <EyeOff className="mr-2 h-4 w-4" />
                 Column Visibility
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -360,14 +406,14 @@ export default function AdminPage() {
           
             <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
                   <UserPlus className="mr-2 h-4 w-4" />
                   Add User
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="bg-gradient-to-br from-white to-violet-50 dark:from-gray-950 dark:to-violet-950/30 border-violet-200 dark:border-violet-800">
                 <DialogHeader>
-                  <DialogTitle>Add New User</DialogTitle>
+                  <DialogTitle className="text-violet-900 dark:text-violet-100">Add New User</DialogTitle>
                   <DialogDescription>
                     Create a new user account. They will receive login credentials via email.
                   </DialogDescription>
@@ -375,7 +421,7 @@ export default function AdminPage() {
                 <form onSubmit={handleAddUser}>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="email" className="text-right">
+                      <Label htmlFor="email" className="text-right text-violet-700 dark:text-violet-300">
                         Email
                       </Label>
                       <Input
@@ -383,40 +429,40 @@ export default function AdminPage() {
                         type="email"
                         value={newUser.email}
                         onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                        className="col-span-3"
+                        className="col-span-3 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
                         required
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="first_name" className="text-right">
+                      <Label htmlFor="first_name" className="text-right text-violet-700 dark:text-violet-300">
                         First Name
                       </Label>
                       <Input
                         id="first_name"
                         value={newUser.first_name}
                         onChange={(e) => setNewUser({ ...newUser, first_name: e.target.value })}
-                        className="col-span-3"
+                        className="col-span-3 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
                         required
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="last_name" className="text-right">
+                      <Label htmlFor="last_name" className="text-right text-violet-700 dark:text-violet-300">
                         Last Name
                       </Label>
                       <Input
                         id="last_name"
                         value={newUser.last_name}
                         onChange={(e) => setNewUser({ ...newUser, last_name: e.target.value })}
-                        className="col-span-3"
+                        className="col-span-3 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
                         required
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="role" className="text-right">
+                      <Label htmlFor="role" className="text-right text-violet-700 dark:text-violet-300">
                         Role
                       </Label>
                       <Select value={newUser.role} onValueChange={(value) => setNewUser({ ...newUser, role: value })}>
-                        <SelectTrigger className="col-span-3">
+                        <SelectTrigger className="col-span-3 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -427,7 +473,11 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button type="submit" disabled={addingUser}>
+                    <Button 
+                      type="submit" 
+                      disabled={addingUser}
+                      className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white"
+                    >
                       {addingUser ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -446,67 +496,68 @@ export default function AdminPage() {
 
         <div className="flex items-center space-x-4">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-violet-500" />
             <Input
               placeholder="Search users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
             />
           </div>
         </div>
 
         {filteredUsers.length > 0 ? (
           <>
-            <div className="border rounded-lg shadow-sm">
-              <div className="p-4 border-b bg-muted/30">
-                <h2 className="text-lg font-medium">User List</h2>
-                <p className="text-sm text-muted-foreground">Manage and update user accounts</p>
+            <div className="border border-violet-200 dark:border-violet-800 rounded-lg shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40">
+                <h2 className="text-lg font-medium text-violet-900 dark:text-violet-100">User List</h2>
+                <p className="text-sm text-violet-600 dark:text-violet-400">Manage and update user accounts</p>
               </div>
               <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
                 <div className="grid gap-4 p-4">
                   {paginatedUsers.map((user) => (
-                    <Card key={user.user_id}>
+                    <Card key={user.user_id} className="border-violet-200 dark:border-violet-800 hover:shadow-md hover:shadow-violet-200/50 dark:hover:shadow-violet-900/30 transition-all">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-primary" />
+                            <div className="w-10 h-10 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 dark:from-violet-500/10 dark:to-indigo-500/10 rounded-full flex items-center justify-center">
+                              <Users className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                             </div>
                             <div>
-                              <h3 className="font-semibold">
+                              <h3 className="font-semibold text-violet-900 dark:text-violet-100">
                                 {user.first_name} {user.last_name}
                               </h3>
-                              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                              <div className="flex items-center space-x-2 text-sm text-violet-600 dark:text-violet-400">
                                 <Mail className="h-4 w-4" />
                                 <span>{user.email}</span>
                               </div>
-                              <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-1">
+                              <div className="flex items-center space-x-2 text-sm text-violet-600 dark:text-violet-400 mt-1">
                                 <Calendar className="h-4 w-4" />
                                 <span>Joined {new Date(user.created_at).toLocaleDateString()}</span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center space-x-3">
-                            <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                            <Badge variant={user.role === "admin" ? "default" : "secondary"} className={user.role === "admin" ? "bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600" : ""}>
                               <Shield className="h-3 w-3 mr-1" />
                               {user.role}
                             </Badge>
-                            <Badge variant={user.is_active ? "default" : "destructive"}>
+                            <Badge variant={user.is_active ? "default" : "destructive"} className={user.is_active ? "bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600" : ""}>
                               {user.is_active ? "Active" : "Inactive"}
                             </Badge>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" className="text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleToggleUserStatus(user.user_id, user.is_active)}>
+                              <DropdownMenuContent align="end" className="border-violet-200 dark:border-violet-800">
+                                <DropdownMenuItem onClick={() => handleToggleUserStatus(user.user_id, user.is_active)} className="hover:bg-violet-50 dark:hover:bg-violet-900/30 cursor-pointer">
                                   {user.is_active ? "Deactivate" : "Activate"} User
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleUpdateUserRole(user.user_id, user.role === "admin" ? "user" : "admin")}
+                                  className="hover:bg-violet-50 dark:hover:bg-violet-900/30 cursor-pointer"
                                 >
                                   Make {user.role === "admin" ? "User" : "Admin"}
                                 </DropdownMenuItem>
@@ -523,10 +574,10 @@ export default function AdminPage() {
             {renderPagination()}
           </>
         ) : (
-          <div className="text-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No users found</h3>
-            <p className="text-muted-foreground">
+          <div className="text-center py-12 border border-dashed border-violet-300 dark:border-violet-800 rounded-lg bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40">
+            <Users className="h-12 w-12 text-violet-400 dark:text-violet-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2 text-violet-900 dark:text-violet-100">No users found</h3>
+            <p className="text-violet-600 dark:text-violet-400">
               {searchTerm ? "Try adjusting your search terms." : "No users have been created yet."}
             </p>
           </div>
