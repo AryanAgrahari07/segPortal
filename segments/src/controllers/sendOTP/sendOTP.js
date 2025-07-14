@@ -1,63 +1,28 @@
-const { executeQuery, executeAppSchemaQuery } = require('../../database/database');
-const nodemailer = require('nodemailer');
+const { executeAppSchemaQuery } = require('../../database/database');
 const bcrypt = require('bcrypt');
+const emailService = require("../../services/emailService");
 require('dotenv').config();
 
-// Create email transporter
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    // secure: false,
-    // requireTLS: true,
-    auth: {
-        user: process.env.OTP_EMAIL.trim(),
-        pass: process.env.OTP_PASSWORD.replace(/['"]/g, '').trim()
-    },
-    // tls: {
-    //     rejectUnauthorized: false,
-    //     minVersion: 'TLSv1.2',
-      
-    // },
-    
-});
-
-
-// Verify SMTP connection on startup
-transporter.verify()
-    .then(() => console.log('SMTP Server connection established'))
-    .catch(error => {
-        console.error('SMTP Connection Error:', {
-            code: error.code,
-            message: error.message
-        });
-        process.exit(1); // Exit if SMTP connection fails on startup
-});
-
-
-// Function to send OTP email
-async function sendOTPEmail(recipientEmail, otp) {
-    const mailOptions = {
-        from: process.env.OTP_EMAIL,
-        to: recipientEmail,
-        subject: 'Your OTP Code (Valid for 60 seconds)',
-        html: `
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2>OTP Verification</h2>
-                <p>Your OTP code is: <strong>${otp}</strong></p>
-                <p>This code will expire in 60 seconds. Please use it immediately.</p>
-                <p>If you didn't request this code, please ignore this email.</p>
-            </div>
-        `
-    };
-
-    try {
-        await transporter.sendMail(mailOptions);
-        return true;
-    } catch (error) {
-        console.error('Email sending error:', error);
-        throw new Error('Failed to send OTP email');
+// Verify AWS SES connection on startup, but don't exit if it fails
+// This allows the application to start even if email service is temporarily unavailable
+emailService
+  .verifyConnection()
+  .then((isConnected) => {
+    if (isConnected) {
+      console.log("✅ AWS SES connection verified");
+    } else {
+      console.warn("⚠️ AWS SES connection verification failed");
+      console.warn("Email functionality may not work correctly");
     }
-}
+  })
+  .catch((error) => {
+    console.warn("⚠️ AWS SES Connection Error:", {
+      message: error.message,
+    });
+    console.warn("Email functionality may not work correctly");
+    console.warn("If using IAM roles, ensure the role has SES permissions");
+  });
+
 
 exports.sendOTP = async (req, res) => {
     const { email } = req.body;
@@ -141,9 +106,21 @@ exports.sendOTP = async (req, res) => {
 
         // Send OTP via email
         try {
-            await sendOTPEmail(email, otp);
+            await emailService.sendOTPEmail(email, otp);
         } catch (emailError) {
             console.error('Email sending failed:', emailError);
+
+            if (emailError.message && emailError.message.includes("credentials")) {
+                console.error(
+                  "AWS credentials issue detected. If using IAM roles, check role permissions for SES access"
+                );
+                return res.status(500).json({
+                  success: false,
+                  message: "Email service configuration error",
+                  error: "aws_credentials_error",
+                });
+              }
+            
             return res.status(500).json({
                 success: false,
                 message: 'Failed to send OTP email',
