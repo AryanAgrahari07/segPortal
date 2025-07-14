@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { useAuth } from "@/contexts/auth-context"
-import { LogOut, Database, Users } from "lucide-react"
+import { LogOut, Database, Users, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -29,6 +29,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       icon: Users,
       show: user?.role === "admin",
     },
+    {
+      name: "Data Deletion",
+      href: user?.role === "admin" ? "/data-deletion/admin" : "/data-deletion",
+      icon: Trash2,
+      show: true, // Show to all users, but with different destinations
+    },
   ]
 
   return (
@@ -42,7 +48,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <nav className="flex space-x-4">
                 {navigation.map((item) => {
                   if (!item.show) return null
-                  const isActive = pathname === item.href
+                  const isActive = pathname === item.href || 
+                                  (item.name === "Data Deletion" && 
+                                   (pathname === "/data-deletion" || pathname === "/data-deletion/admin"))
                   return (
                     <Link
                       key={item.name}

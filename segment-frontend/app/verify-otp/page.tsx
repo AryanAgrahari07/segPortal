@@ -73,9 +73,9 @@ export default function VerifyOTPPage() {
       })
       
       // Reset timer and disable resend button
-      setTimeLeft(300)
+      setTimeLeft(60)
       setResendDisabled(true)
-      setTimeout(() => setResendDisabled(false), 30000)
+      setTimeout(() => setResendDisabled(false), 60000)
       
     } catch (error: any) {
       toast({
