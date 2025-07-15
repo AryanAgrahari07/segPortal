@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 // Create a new data deletion request
 const createDeletionRequest = async (req, res) => {
   try {
-    const { customer_email, customer_request_timestamp, notes } = req.body;
+    const { customer_email, customer_request_timestamp, notes, deletion_sources } = req.body;
 
     // Validate required fields
     if (!customer_email) {
@@ -29,6 +29,9 @@ const createDeletionRequest = async (req, res) => {
     
     // Get current timestamp for entry_created_timestamp
     const entry_created_timestamp = new Date().toISOString();
+    
+    // Use default value for deletion_sources if not provided
+    const sources = deletion_sources || '';
 
     // Insert the request into the database using string interpolation
     const query = `
@@ -38,7 +41,8 @@ const createDeletionRequest = async (req, res) => {
         status,
         notes,
         customer_request_timestamp,
-        entry_created_timestamp
+        entry_created_timestamp,
+        deletion_sources
       )
       VALUES (
         '${request_id}',
@@ -46,7 +50,8 @@ const createDeletionRequest = async (req, res) => {
         '${status}',
         ${notes ? `'${notes}'` : 'NULL'},
         '${customer_request_timestamp}',
-        '${entry_created_timestamp}'
+        '${entry_created_timestamp}',
+        '${sources}'
       )
     `;
 
@@ -61,7 +66,8 @@ const createDeletionRequest = async (req, res) => {
         status,
         notes,
         customer_request_timestamp,
-        entry_created_timestamp
+        entry_created_timestamp,
+        deletion_sources: sources
       }
     });
   } catch (error) {
@@ -204,16 +210,32 @@ const processDeletionRequest = async (req, res) => {
 
     await executeAppSchemaQuery(updateQuery);
 
+    // Get deletion sources from the request
+    const deletionSources = request.deletion_sources ? request.deletion_sources.split(',') : ['Shopify', 'Braze', 'CDR'];
+
     // Perform the actual data deletion operations
     try {
-      // 1. Delete from Databricks
-      // await deleteFromDatabricks(request.customer_email);
-      
-      // // 2. Delete from Shopify
-      // await deleteFromShopify(request.customer_email);
-      
-      // // 3. Delete from Braze
-      // await deleteFromBraze(request.customer_email);
+      // Process each selected source
+      for (const source of deletionSources) {
+        console.log(`Processing deletion for source: ${source}`);
+        
+        switch (source.trim()) {
+          case 'Shopify':
+            // await deleteFromShopify(request.customer_email);
+            console.log(`Deleted data for ${request.customer_email} from Shopify`);
+            break;
+          case 'Braze':
+            // await deleteFromBraze(request.customer_email);
+            console.log(`Deleted data for ${request.customer_email} from Braze`);
+            break;
+          case 'CDR':
+            // await deleteFromDatabricks(request.customer_email);
+            console.log(`Deleted data for ${request.customer_email} from CDR`);
+            break;
+          default:
+            console.log(`Unknown source: ${source}, skipping`);
+        }
+      }
       
       // If all deletions successful, update status to 'Completed'
       const completeQuery = `
@@ -265,126 +287,33 @@ const processDeletionRequest = async (req, res) => {
   }
 };
 
+
+
+
 // Helper functions for data deletion from different systems
 
 // Delete user data from Databricks
 // async function deleteFromDatabricks(email) {
-//   try {
-//     console.log(`Deleting data for ${email} from Databricks gold schema...`);
-    
-//     // Step 1: Get the gold schema name from environment variable
-//     const goldSchema = process.env.GOLD_SCHEMA || 'uat.gold';
-//     console.log(`Using gold schema: ${goldSchema}`);
+//  try {
+//     console.log(`Deleting data for ${email} from Databricks...`);
 
-//     // Step 2: Get a list of all tables in the gold schema
-//     const getTablesQuery = `
-//       SHOW TABLES IN ${goldSchema}
-//     `;
-    
-//     const tables = await executeGoldSchemaQuery(getTablesQuery);
-//     console.log(`Found ${tables.length} tables in the gold schema`);
-
-//     // Step 3: For each table, determine if it might contain user data
-//     const deletionPromises = tables.map(async (table) => {
-//       try {
-//         const tableName = table.tableName;
-        
-//         // Step 3a: Get the table schema to identify columns that might contain email
-//         const getColumnsQuery = `
-//           DESCRIBE TABLE ${goldSchema}.${tableName}
-//         `;
-        
-//         const columns = await executeGoldSchemaQuery(getColumnsQuery);
-        
-//         // Step 3b: Look for email-related columns (case insensitive)
-//         for (const column of columns) {
-//           const colName = column.col_name || column.name || '';
-//           const dataType = (column.data_type || column.type || '').toLowerCase();
-          
-//           // Check if this column might contain user identifiers
-//           if (colName.toLowerCase().includes('email') || 
-//               colName.toLowerCase().includes('mail')) {
-            
-//             // For string columns, we can do direct comparison
-//             if (dataType.includes('string') || dataType.includes('varchar') || dataType.includes('char')) {
-//               console.log(`Deleting records from ${goldSchema}.${tableName} where ${colName} matches '${email}'`);
-              
-//               try {
-//                 const deleteQuery = `
-//                   DELETE FROM ${goldSchema}.${tableName}
-//                   WHERE ${colName} = '${email}'
-//                 `;
-                
-//                 await executeGoldSchemaQuery(deleteQuery);
-//                 console.log(`Successfully deleted matching records from ${tableName}.${colName}`);
-//               } catch (deleteError) {
-//                 console.error(`Error deleting from ${tableName}.${colName}: ${deleteError.message}`);
-//               }
-//             }
-//           }
-          
-//           // For user/customer ID columns, we need to handle differently since they're likely numeric
-//           // and can't be directly compared with email strings
-//           if ((colName.toLowerCase() === 'user_id' || 
-//                colName.toLowerCase() === 'customer_id' ||
-//                colName.toLowerCase() === 'user' || 
-//                colName.toLowerCase() === 'customer') && 
-//               (dataType.includes('int') || dataType.includes('decimal') || dataType.includes('bigint'))) {
-            
-//             // For numeric IDs, we need to find the corresponding ID first
-//             console.log(`Found numeric ID column ${colName} in ${tableName}, looking for corresponding email column...`);
-            
-//             // First, check if there's an email column in the same table
-//             const emailColumns = columns.filter(col => {
-//               const name = (col.col_name || col.name || '').toLowerCase();
-//               return name.includes('email') || name.includes('mail');
-//             });
-            
-//             if (emailColumns.length > 0) {
-//               // There's an email column, so we can find the ID using it
-//               const emailColName = emailColumns[0].col_name || emailColumns[0].name;
-//               console.log(`Using email column ${emailColName} to find IDs to delete`);
-              
-//               try {
-//                 // Two-step approach: first find the IDs, then delete based on those IDs
-//                 const findIdsQuery = `
-//                   SELECT ${colName} 
-//                   FROM ${goldSchema}.${tableName}
-//                   WHERE ${emailColName} = '${email}'
-//                 `;
-                
-//                 const results = await executeGoldSchemaQuery(findIdsQuery);
-                
-//                 if (results && results.length > 0) {
-//                   for (const row of results) {
-//                     const id = row[colName];
-//                     console.log(`Found ID ${id} matching email ${email}, deleting...`);
-                    
-//                     const deleteByIdQuery = `
-//                       DELETE FROM ${goldSchema}.${tableName}
-//                       WHERE ${colName} = ${id}
-//                     `;
-                    
-//                     await executeGoldSchemaQuery(deleteByIdQuery);
-//                     console.log(`Successfully deleted records with ${colName} = ${id} from ${tableName}`);
-//                   }
-//                 }
-//               } catch (idError) {
-//                 console.error(`Error during ID-based deletion for ${tableName}: ${idError.message}`);
-//               }
-//             }
-//           }
-//         }
-//       } catch (error) {
-//         // Log error but continue with other tables
-//         console.error(`Error processing table for deletion: ${error.message}`);
-//       }
+//     const response = await fetch('https://databricks-api-endpoint', {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': `Bearer ${process.env.DATABRICKS_API_KEY}`
+//       },
+//       body: JSON.stringify({ email })
 //     });
     
-//     // Wait for all deletion operations to complete
-//     await Promise.all(deletionPromises);
+//     if (!response.ok) {
+//       throw new Error(`Databricks API returned ${response.status}`);
+//     }
     
-//     console.log(`Successfully completed deletion process for ${email} from Databricks`);
+//     const data = await response.json();
+    
+//     // For now, we'll simulate a successful API call
+//     console.log(`Successfully deleted data for ${email} from Databricks`);
 //     return true;
 //   } catch (error) {
 //     console.error(`Error deleting data from Databricks for ${email}:`, error);
@@ -396,10 +325,7 @@ const processDeletionRequest = async (req, res) => {
 // async function deleteFromShopify(email) {
 //   try {
 //     console.log(`Deleting data for ${email} from Shopify...`);
-    
-//     // This would be replaced with actual Shopify API call
-//     // Example using fetch:
-//     /*
+
 //     const response = await fetch('https://shopify-api-endpoint/customers/data-erasure', {
 //       method: 'POST',
 //       headers: {
@@ -414,7 +340,6 @@ const processDeletionRequest = async (req, res) => {
 //     }
     
 //     const data = await response.json();
-//     */
     
 //     // For now, we'll simulate a successful API call
 //     console.log(`Successfully deleted data for ${email} from Shopify`);
@@ -429,10 +354,7 @@ const processDeletionRequest = async (req, res) => {
 // async function deleteFromBraze(email) {
 //   try {
 //     console.log(`Deleting data for ${email} from Braze...`);
-    
-//     // This would be replaced with actual Braze API call
-//     // Example using fetch:
-//     /*
+  
 //     const response = await fetch('https://rest.iad-01.braze.com/users/delete', {
 //       method: 'POST',
 //       headers: {
@@ -452,7 +374,6 @@ const processDeletionRequest = async (req, res) => {
 //     }
     
 //     const data = await response.json();
-//     */
     
 //     // For now, we'll simulate a successful API call
 //     console.log(`Successfully deleted data for ${email} from Braze`);

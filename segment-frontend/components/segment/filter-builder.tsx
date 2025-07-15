@@ -86,7 +86,18 @@ interface FilterBuilderProps {
           { value: "IS NOT NULL", label: "Is Not Empty" },
         ]
       case "TIMESTAMP":
+      case "DATE":
         return [
+          // Date preset operators at the top
+          { value: "LAST_7_DAYS", label: "Last 7 Days" },
+          { value: "LAST_30_DAYS", label: "Last 30 Days" },
+          { value: "THIS_MONTH", label: "This Month" },
+          { value: "LAST_MONTH", label: "Last Month" },
+          { value: "LAST_3_MONTHS", label: "Last 3 Months" },
+          { value: "LAST_6_MONTHS", label: "Last 6 Months" },
+          { value: "THIS_YEAR", label: "This Year" },
+          { value: "LAST_YEAR", label: "Last Year" },
+          // Standard operators after presets
           { value: "=", label: "On Date" },
           { value: "!=", label: "Not On Date" },
           { value: ">", label: "After" },
@@ -390,6 +401,129 @@ function TimePicker({
   );
 }
 
+// Add DatePresetSelector component for quick date range selection
+function DatePresetSelector({
+  onSelect,
+  className
+}: {
+  onSelect: (startDate: string, endDate: string) => void,
+  className?: string
+}) {
+  // Get current date for calculations
+  const today = new Date();
+  
+  // Format date as YYYY-MM-DD
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Calculate date ranges
+  const presets = [
+    {
+      label: "Today",
+      getRange: () => {
+        return [formatDate(today), formatDate(today)];
+      }
+    },
+    {
+      label: "Yesterday",
+      getRange: () => {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return [formatDate(yesterday), formatDate(yesterday)];
+      }
+    },
+    {
+      label: "Last 7 days",
+      getRange: () => {
+        const lastWeek = new Date(today);
+        lastWeek.setDate(lastWeek.getDate() - 6); // -6 to include today
+        return [formatDate(lastWeek), formatDate(today)];
+      }
+    },
+    {
+      label: "Last 30 days",
+      getRange: () => {
+        const lastMonth = new Date(today);
+        lastMonth.setDate(lastMonth.getDate() - 29); // -29 to include today
+        return [formatDate(lastMonth), formatDate(today)];
+      }
+    },
+    {
+      label: "This month",
+      getRange: () => {
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        return [formatDate(firstDayOfMonth), formatDate(today)];
+      }
+    },
+    {
+      label: "Last month",
+      getRange: () => {
+        const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        return [formatDate(firstDayLastMonth), formatDate(lastDayLastMonth)];
+      }
+    },
+    {
+      label: "Last 3 months",
+      getRange: () => {
+        const threeMonthsAgo = new Date(today);
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        return [formatDate(threeMonthsAgo), formatDate(today)];
+      }
+    },
+    {
+      label: "Last 6 months",
+      getRange: () => {
+        const sixMonthsAgo = new Date(today);
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        return [formatDate(sixMonthsAgo), formatDate(today)];
+      }
+    },
+    {
+      label: "This year",
+      getRange: () => {
+        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+        return [formatDate(firstDayOfYear), formatDate(today)];
+      }
+    },
+    {
+      label: "Last year",
+      getRange: () => {
+        const firstDayLastYear = new Date(today.getFullYear() - 1, 0, 1);
+        const lastDayLastYear = new Date(today.getFullYear() - 1, 11, 31);
+        return [formatDate(firstDayLastYear), formatDate(lastDayLastYear)];
+      }
+    }
+  ];
+
+  return (
+    <div className={cn("mt-2", className)}>
+      <Label className="text-xs text-muted-foreground mb-1.5 block">Quick Presets</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map((preset, index) => (
+          <Button
+            key={index}
+            variant="outline"
+            size="sm"
+            className="text-xs h-7 border-violet-300 dark:border-violet-700 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+            onClick={() => {
+              const [start, end] = preset.getRange();
+              onSelect(start, end);
+            }}
+          >
+            <Clock className="mr-1 h-3 w-3 text-violet-600" />
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = false }: FilterBuilderProps) {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -424,6 +558,102 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
   const needsSecondValue = filter.operator === "BETWEEN" || filter.operator === "NOT_BETWEEN";
   const needsNoValue = filter.operator === "IS NULL" || filter.operator === "IS NOT NULL";
   const isListType = filter.operator === "IN" || filter.operator === "NOT_IN";
+
+  // Add a function to handle date preset operators
+  const handleDatePresetOperator = (operator: string) => {
+    // Get current date for calculations
+    const today = new Date();
+    
+    // Format date as YYYY-MM-DD
+    const formatDate = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    // Calculate date range based on operator
+    let startDate = "";
+    let endDate = formatDate(today);
+    
+    switch (operator) {
+      case "LAST_7_DAYS":
+        const lastWeek = new Date(today);
+        lastWeek.setDate(lastWeek.getDate() - 6); // -6 to include today
+        startDate = formatDate(lastWeek);
+        break;
+        
+      case "LAST_30_DAYS":
+        const lastMonth = new Date(today);
+        lastMonth.setDate(lastMonth.getDate() - 29); // -29 to include today
+        startDate = formatDate(lastMonth);
+        break;
+        
+      case "THIS_MONTH":
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        startDate = formatDate(firstDayOfMonth);
+        break;
+        
+      case "LAST_MONTH":
+        const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        startDate = formatDate(firstDayLastMonth);
+        endDate = formatDate(lastDayLastMonth);
+        break;
+        
+      case "LAST_3_MONTHS":
+        const threeMonthsAgo = new Date(today);
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        startDate = formatDate(threeMonthsAgo);
+        break;
+        
+      case "LAST_6_MONTHS":
+        const sixMonthsAgo = new Date(today);
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        startDate = formatDate(sixMonthsAgo);
+        break;
+        
+      case "THIS_YEAR":
+        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+        startDate = formatDate(firstDayOfYear);
+        break;
+        
+      case "LAST_YEAR":
+        const firstDayLastYear = new Date(today.getFullYear() - 1, 0, 1);
+        const lastDayLastYear = new Date(today.getFullYear() - 1, 11, 31);
+        startDate = formatDate(firstDayLastYear);
+        endDate = formatDate(lastDayLastYear);
+        break;
+    }
+    
+    // For date preset operators, we'll use BETWEEN operator internally
+    // but keep the original operator for UI display purposes
+    onUpdate({
+      value: startDate,
+      value2: endDate
+    });
+  };
+  
+  // Add effect to handle date preset operators when they're selected
+  useEffect(() => {
+    const isDatePresetOperator = [
+      "LAST_7_DAYS", 
+      "LAST_30_DAYS", 
+      "THIS_MONTH", 
+      "LAST_MONTH",
+      "LAST_3_MONTHS", 
+      "LAST_6_MONTHS", 
+      "THIS_YEAR", 
+      "LAST_YEAR"
+    ].includes(filter.operator);
+    
+    if (isDatePresetOperator) {
+      // Use setTimeout to ensure this happens after any other state updates
+      setTimeout(() => {
+        handleDatePresetOperator(filter.operator);
+      }, 0);
+    }
+  }, [filter.operator]);
 
   // Calculate visible items based on scroll position - simple virtualization
   useEffect(() => {
@@ -818,66 +1048,110 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
     );
   }
 
-  // Add a function to handle timestamp inputs specifically
+  // Modify the renderTimestampInput function to include a simple preset indicator
   const renderTimestampInput = (value: string, onChange: (value: string) => void, placeholder: string) => {
-    // Extract date and time parts with better error handling
+    // Parse date and time from the value
     const parseDateTime = (dateTimeStr: string): [string, string] => {
-      if (!dateTimeStr) return ["", "00:00"];
+      if (!dateTimeStr) return ["", ""];
       
-      // Handle ISO format with T separator
-      if (dateTimeStr.includes('T')) {
-        const [datePart, timePart] = dateTimeStr.split('T');
-        return [datePart, timePart.split(':').slice(0, 2).join(':')];
-      }
-      
-      // Handle date-only format
+      // Check if the value is just a date (YYYY-MM-DD)
       if (dateTimeStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return [dateTimeStr, "00:00"];
+        return [dateTimeStr, ""];
       }
       
-      // Handle other formats or return empty
+      // Try to parse as ISO string or other formats
       try {
-        // Use local date parsing to avoid timezone issues
         const date = new Date(dateTimeStr);
         if (!isNaN(date.getTime())) {
-          // Format as YYYY-MM-DD using local timezone
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const dateYear = date.getFullYear();
+          const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
+          const dateDay = String(date.getDate()).padStart(2, '0');
+          const formattedDate = `${dateYear}-${dateMonth}-${dateDay}`;
           
-          return [
-            `${year}-${month}-${day}`,
-            `${hours}:${minutes}`
-          ];
+          // For time, we'll just return empty string for now
+          // as we're focusing on date presets
+          return [formattedDate, ""];
         }
       } catch (e) {
-        console.error("Date parsing error:", e);
+        console.error("Error parsing date:", e);
       }
       
-      return ["", "00:00"];
+      return ["", ""];
     };
     
-    const [datePart, timePart] = parseDateTime(value);
+    const [dateValue] = parseDateTime(value);
+    
+    // Format date for display
+    const formatDateForDisplay = (dateStr: string): string => {
+      if (!dateStr) return "";
+      try {
+        const date = new Date(dateStr);
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        }).format(date);
+      } catch (e) {
+        return dateStr;
+      }
+    };
+    
+    // Get preset label for display
+    const getPresetLabel = () => {
+      // Only show preset indicator for preset operators
+      const isDatePresetOperator = [
+        "LAST_7_DAYS", 
+        "LAST_30_DAYS", 
+        "THIS_MONTH", 
+        "LAST_MONTH",
+        "LAST_3_MONTHS", 
+        "LAST_6_MONTHS", 
+        "THIS_YEAR", 
+        "LAST_YEAR"
+      ].includes(filter.operator);
+      
+      if (!isDatePresetOperator) return null;
+      
+      // Map operator to readable label
+      const presetLabels: Record<string, string> = {
+        "LAST_7_DAYS": "Last 7 Days",
+        "LAST_30_DAYS": "Last 30 Days",
+        "THIS_MONTH": "This Month",
+        "LAST_MONTH": "Last Month",
+        "LAST_3_MONTHS": "Last 3 Months",
+        "LAST_6_MONTHS": "Last 6 Months",
+        "THIS_YEAR": "This Year",
+        "LAST_YEAR": "Last Year"
+      };
+      
+      return presetLabels[filter.operator] || null;
+    };
+    
+    const presetLabel = getPresetLabel();
     
     return (
-      <div className="flex flex-col gap-2">
-        <DatePicker 
-          date={datePart} 
-          setDate={(date) => {
-            // Preserve time part when changing date
-            onChange(`${date}T${timePart || "00:00"}`);
-          }}
-        />
-        <TimePicker 
-          time={timePart} 
-          setTime={(time) => {
-            // Preserve date part when changing time
-            const date = datePart || new Date().toISOString().split('T')[0];
-            onChange(`${date}T${time}`);
-          }}
-        />
+      <div className="space-y-2 w-full">
+        {presetLabel ? (
+          <div className="flex flex-col space-y-1 text-sm bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-md px-3 py-2">
+            <div className="flex items-center">
+              <Clock className="h-4 w-4 mr-2 text-violet-600" />
+              <span>Using preset: <span className="font-medium text-violet-700 dark:text-violet-300">{presetLabel}</span></span>
+            </div>
+            {filter.value && filter.value2 && (
+              <div className="text-xs text-muted-foreground ml-6 flex items-center">
+                <span className="font-medium mr-1">From</span> {formatDateForDisplay(filter.value)} 
+                <span className="mx-1">→</span> 
+                <span className="font-medium mr-1">to</span> {formatDateForDisplay(filter.value2)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <DatePicker
+            date={dateValue}
+            setDate={onChange}
+            className="w-full"
+          />
+        )}
       </div>
     );
   };

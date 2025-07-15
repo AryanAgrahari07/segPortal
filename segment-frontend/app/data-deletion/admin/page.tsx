@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { format } from "date-fns"
-import { AlertCircle, CheckCircle, Clock, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { AlertCircle, CheckCircle, Clock, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ListFilter, FormInput } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import DataDeletionForm from "../components/data-deletion-form"
 
 export default function DataDeletionAdminPage() {
   const { toast } = useToast()
@@ -37,6 +38,7 @@ export default function DataDeletionAdminPage() {
   const [pagination, setPagination] = useState<PaginationMeta | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [pageInput, setPageInput] = useState("")
+  const [mainView, setMainView] = useState<"requests" | "form">("requests")
 
   // Get parameters from URL
   const currentPage = parseInt(searchParams.get("page") || "1")
@@ -166,157 +168,193 @@ export default function DataDeletionAdminPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-violet-200 dark:border-violet-800 shadow-sm">
-        <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-200 dark:border-violet-800">
-          <CardTitle className="text-violet-900 dark:text-violet-100">Data Deletion Requests</CardTitle>
-          <CardDescription>
-            Review and process customer data deletion requests.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6">
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="relative">
-                <div className="w-12 h-12 mx-auto relative">
-                  {/* Outer ring animation */}
-                  <div className="absolute inset-0 rounded-full border-4 border-violet-200 dark:border-violet-800/40"></div>
-                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Tabs defaultValue={currentStatus} onValueChange={handleStatusChange} className="w-full">
-              <TabsList className="mb-4 bg-violet-100/50 dark:bg-violet-900/20">
-                <TabsTrigger 
-                  value="pending"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
-                >
-                  Pending
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="completed"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
-                >
-                  Completed
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="failed"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
-                >
-                  Failed
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="all"
-                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
-                >
-                  All
-                </TabsTrigger>
-              </TabsList>
-              
-              <div>
-                {renderRequestsTable(deletionRequests)}
-                
-                {/* Enhanced Pagination UI */}
-                {pagination && pagination.totalPages > 0 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4">
-                    <div className="text-sm text-violet-600 dark:text-violet-400">
-                      Showing {deletionRequests.length} of {pagination.total} results
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                      {/* Page size selector */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-violet-600 dark:text-violet-400">Rows per page:</span>
-                        <Select 
-                          value={pageSize.toString()}
-                          onValueChange={handlePageSizeChange}
-                        >
-                          <SelectTrigger className="w-16 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
-                            <SelectValue placeholder={pageSize.toString()} />
-                          </SelectTrigger>
-                          <SelectContent className="border-violet-200 dark:border-violet-800">
-                            <SelectItem value="5">5</SelectItem>
-                            <SelectItem value="10">10</SelectItem>
-                            <SelectItem value="20">20</SelectItem>
-                            <SelectItem value="50">50</SelectItem>
-                            <SelectItem value="100">100</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+      {/* Main View Tabs - Switch between Requests and Form */}
+      <Tabs defaultValue="requests" onValueChange={(value) => setMainView(value as "requests" | "form")} className="w-full">
+        <TabsList className="mb-4 bg-violet-100/50 dark:bg-violet-900/20">
+          <TabsTrigger 
+            value="requests"
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+          >
+            <ListFilter className="h-4 w-4 mr-2" />
+            Manage Requests
+          </TabsTrigger>
+          <TabsTrigger 
+            value="form"
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+          >
+            <FormInput className="h-4 w-4 mr-2" />
+            Create New Request
+          </TabsTrigger>
+        </TabsList>
 
-                      {/* Page navigation */}
-                      <div className="flex items-center">
-                        {/* First page */}
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          className="h-8 w-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
-                          onClick={() => handlePageChange(1)}
-                          disabled={pagination.page === 1}
-                        >
-                          <ChevronsLeft className="h-4 w-4" />
-                          <span className="sr-only">First Page</span>
-                        </Button>
-                        
-                        {/* Previous page */}
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          className="h-8 w-8 ml-2 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
-                          onClick={() => handlePageChange(pagination.page - 1)}
-                          disabled={!pagination.hasPrevPage}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                          <span className="sr-only">Previous Page</span>
-                        </Button>
-                        
-                        {/* Page input */}
-                        <form 
-                          onSubmit={handlePageInputSubmit} 
-                          className="flex items-center mx-2"
-                        >
-                          <Input 
-                            type="text"
-                            className="h-8 w-12 px-2 text-center border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
-                            value={pageInput}
-                            onChange={handlePageInputChange}
-                            aria-label="Current page"
-                          />
-                          <span className="mx-2 text-sm text-violet-600 dark:text-violet-400">of {pagination.totalPages}</span>
-                        </form>
-                        
-                        {/* Next page */}
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          className="h-8 w-8 mr-2 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
-                          onClick={() => handlePageChange(pagination.page + 1)}
-                          disabled={!pagination.hasNextPage}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                          <span className="sr-only">Next Page</span>
-                        </Button>
-                        
-                        {/* Last page */}
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          className="h-8 w-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
-                          onClick={() => handlePageChange(pagination.totalPages)}
-                          disabled={pagination.page === pagination.totalPages}
-                        >
-                          <ChevronsRight className="h-4 w-4" />
-                          <span className="sr-only">Last Page</span>
-                        </Button>
-                      </div>
+        <TabsContent value="requests">
+          <Card className="border-violet-200 dark:border-violet-800 shadow-sm">
+            <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-200 dark:border-violet-800">
+              <CardTitle className="text-violet-900 dark:text-violet-100">Data Deletion Requests</CardTitle>
+              <CardDescription>
+                Review and process customer data deletion requests.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="relative">
+                    <div className="w-12 h-12 mx-auto relative">
+                      {/* Outer ring animation */}
+                      <div className="absolute inset-0 rounded-full border-4 border-violet-200 dark:border-violet-800/40"></div>
+                      <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
                     </div>
                   </div>
-                )}
-              </div>
-            </Tabs>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              ) : (
+                <Tabs defaultValue={currentStatus} onValueChange={handleStatusChange} className="w-full">
+                  <TabsList className="mb-4 bg-violet-100/50 dark:bg-violet-900/20">
+                    <TabsTrigger 
+                      value="pending"
+                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+                    >
+                      Pending
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="completed"
+                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+                    >
+                      Completed
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="failed"
+                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+                    >
+                      Failed
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="all"
+                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-600 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
+                    >
+                      All
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <div>
+                    {renderRequestsTable(deletionRequests)}
+                    
+                    {/* Enhanced Pagination UI */}
+                    {pagination && pagination.totalPages > 0 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4">
+                        <div className="text-sm text-violet-600 dark:text-violet-400">
+                          Showing {deletionRequests.length} of {pagination.total} results
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                          {/* Page size selector */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-violet-600 dark:text-violet-400">Rows per page:</span>
+                            <Select 
+                              value={pageSize.toString()}
+                              onValueChange={handlePageSizeChange}
+                            >
+                              <SelectTrigger className="w-16 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
+                                <SelectValue placeholder={pageSize.toString()} />
+                              </SelectTrigger>
+                              <SelectContent className="border-violet-200 dark:border-violet-800">
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Page navigation */}
+                          <div className="flex items-center">
+                            {/* First page */}
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-8 w-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
+                              onClick={() => handlePageChange(1)}
+                              disabled={pagination.page === 1}
+                            >
+                              <ChevronsLeft className="h-4 w-4" />
+                              <span className="sr-only">First Page</span>
+                            </Button>
+                            
+                            {/* Previous page */}
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              className="h-8 w-8 ml-2 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
+                              onClick={() => handlePageChange(pagination.page - 1)}
+                              disabled={!pagination.hasPrevPage}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              <span className="sr-only">Previous Page</span>
+                            </Button>
+                            
+                            {/* Page input */}
+                            <form 
+                              onSubmit={handlePageInputSubmit} 
+                              className="flex items-center mx-2"
+                            >
+                              <Input 
+                                type="text"
+                                className="h-8 w-12 px-2 text-center border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
+                                value={pageInput}
+                                onChange={handlePageInputChange}
+                                aria-label="Current page"
+                              />
+                              <span className="mx-2 text-sm text-violet-600 dark:text-violet-400">of {pagination.totalPages}</span>
+                            </form>
+                            
+                            {/* Next page */}
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              className="h-8 w-8 mr-2 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
+                              onClick={() => handlePageChange(pagination.page + 1)}
+                              disabled={!pagination.hasNextPage}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                              <span className="sr-only">Next Page</span>
+                            </Button>
+                            
+                            {/* Last page */}
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              className="h-8 w-8 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30"
+                              onClick={() => handlePageChange(pagination.totalPages)}
+                              disabled={pagination.page === pagination.totalPages}
+                            >
+                              <ChevronsRight className="h-4 w-4" />
+                              <span className="sr-only">Last Page</span>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="form">
+          <Card className="border-violet-200 dark:border-violet-800 shadow-sm">
+            <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-200 dark:border-violet-800">
+              <CardTitle className="text-violet-900 dark:text-violet-100">Create Data Deletion Request</CardTitle>
+              <CardDescription>
+                Create a new data deletion request on behalf of a customer.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <DataDeletionForm />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 
@@ -342,6 +380,7 @@ export default function DataDeletionAdminPage() {
               <TableHead className="text-violet-700 dark:text-violet-300">Status</TableHead>
               <TableHead className="text-violet-700 dark:text-violet-300">Request Time</TableHead>
               <TableHead className="text-violet-700 dark:text-violet-300">Created Time</TableHead>
+              <TableHead className="text-violet-700 dark:text-violet-300">Deletion Sources</TableHead>
               <TableHead className="text-violet-700 dark:text-violet-300">Notes</TableHead>
               <TableHead className="text-violet-700 dark:text-violet-300">Actions</TableHead>
             </TableRow>
@@ -353,6 +392,13 @@ export default function DataDeletionAdminPage() {
                 <TableCell>{getStatusBadge(request.status)}</TableCell>
                 <TableCell>{formatDateTime(request.customer_request_timestamp)}</TableCell>
                 <TableCell>{formatDateTime(request.entry_created_timestamp)}</TableCell>
+                <TableCell>
+                  {request.deletion_sources ? request.deletion_sources.split(',').map((source, i) => (
+                    <Badge key={i} variant="outline" className="mr-1 mb-1 bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:border-violet-800">
+                      {source}
+                    </Badge>
+                  )) : "No Sources"}
+                </TableCell>
                 <TableCell className="max-w-xs truncate">{request.notes || "-"}</TableCell>
                 <TableCell>
                   {request.status.toLowerCase() === "pending" && (
@@ -372,11 +418,19 @@ export default function DataDeletionAdminPage() {
                           <AlertDialogDescription>
                             Are you sure you want to approve this data deletion request? 
                             This action will permanently delete all data associated with 
-                            <span className="font-semibold"> {request.customer_email}</span> from:
+                            <span className="font-semibold"> {request.customer_email}</span> from the following sources:
                             <ul className="list-disc list-inside mt-2">
-                              <li>Databricks</li>
-                              <li>Shopify</li>
-                              <li>Braze</li>
+                              {request.deletion_sources ? 
+                                request.deletion_sources.split(',').map((source, i) => (
+                                  <li key={i}>{source}</li>
+                                ))
+                                : 
+                                <>
+                                  <li>Shopify</li>
+                                  <li>Braze</li>
+                                  <li>CDR</li>
+                                </>
+                              }
                             </ul>
                             This action cannot be undone.
                           </AlertDialogDescription>

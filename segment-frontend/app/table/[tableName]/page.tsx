@@ -455,16 +455,42 @@ export default function TableDetailPage() {
                 .map((group) => ({
                   logic_operator: group.condition === "NOT" ? "AND" : group.condition,
                   not: group.condition === "NOT",
-                  filters: group.filters.map((filter) => ({
-                    type: 'condition',
-                    column: filter.column,
-                    operator: mapOperatorToBackend(filter.operator),
-                    value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
-                      ? [filter.value, filter.value2] 
-                      : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
-                        ? filter.value.split(',').map((v: string) => v.trim()) 
-                        : filter.value
-                  }))
+                  filters: group.filters.map((filter) => {
+                    // Check if this is a date preset operator
+                    const isDatePresetOperator = [
+                      "LAST_7_DAYS", 
+                      "LAST_30_DAYS", 
+                      "THIS_MONTH", 
+                      "LAST_MONTH",
+                      "LAST_3_MONTHS", 
+                      "LAST_6_MONTHS", 
+                      "THIS_YEAR", 
+                      "LAST_YEAR"
+                    ].includes(filter.operator);
+                    
+                    // For date preset operators, we use the value and value2 directly
+                    // as they were already calculated in the filter-builder component
+                    if (isDatePresetOperator) {
+                      return {
+                        type: 'condition',
+                        column: filter.column,
+                        operator: 'between', // Use between operator for all date presets
+                        value: [filter.value, filter.value2]
+                      };
+                    }
+                    
+                    // For regular operators
+                    return {
+                      type: 'condition',
+                      column: filter.column,
+                      operator: mapOperatorToBackend(filter.operator),
+                      value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                        ? [filter.value, filter.value2] 
+                        : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                          ? filter.value.split(',').map((v: string) => v.trim()) 
+                          : filter.value
+                    };
+                  })
                 })),
               groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
               page: pagination.page,
@@ -1053,60 +1079,83 @@ export default function TableDetailPage() {
         const filterClauses = group.filters
           .map((filter) => {
             let clause = ""
-            switch (filter.operator) {
-              case "=":
-              case "!=":
-              case ">":
-              case ">=":
-              case "<":
-              case "<=":
-                clause = `${filter.column} ${filter.operator} '${filter.value}'`
-                break
-              case "BETWEEN":
+            
+            // Special handling for date preset operators
+            const isDatePresetOperator = [
+              "LAST_7_DAYS", 
+              "LAST_30_DAYS", 
+              "THIS_MONTH", 
+              "LAST_MONTH",
+              "LAST_3_MONTHS", 
+              "LAST_6_MONTHS", 
+              "THIS_YEAR", 
+              "LAST_YEAR"
+            ].includes(filter.operator);
+            
+            if (isDatePresetOperator) {
+              // For date preset operators, we'll use the BETWEEN operator
+              // The actual date values should have been set in the filter-builder component
+              if (filter.value && filter.value2) {
                 clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
-                break
-              case "NOT_BETWEEN":
-                clause = `${filter.column} NOT BETWEEN '${filter.value}' AND '${filter.value2}'`
-                break
-              case "IN":
-                const inValues = filter.value
-                  .split(",")
-                  .map((v: string) => `'${v.trim()}'`)
-                  .join(",")
-                clause = `${filter.column} IN (${inValues})`
-                break
-              case "NOT_IN":
-                const notInValues = filter.value
-                  .split(",")
-                  .map((v: string) => `'${v.trim()}'`)
-                  .join(",")
-                clause = `${filter.column} NOT IN (${notInValues})`
-                break
-              case "LIKE":
-                clause = `${filter.column} LIKE '%${filter.value}%'`
-                break
-              case "NOT LIKE":
-                clause = `${filter.column} NOT LIKE '%${filter.value}%'`
-                break
-              case "STARTS_WITH":
-                clause = `${filter.column} LIKE '${filter.value}%'`
-                break
-              case "NOT_STARTS_WITH":
-                clause = `${filter.column} NOT LIKE '${filter.value}%'`
-                break
-              case "ENDS_WITH":
-                clause = `${filter.column} LIKE '%${filter.value}'`
-                break
-              case "NOT_ENDS_WITH":
-                clause = `${filter.column} NOT LIKE '%${filter.value}'`
-                break
-              case "IS NULL":
-                clause = `${filter.column} IS NULL`
-                break
-              case "IS NOT NULL":
-                clause = `${filter.column} IS NOT NULL`
-                break
+              }
+            } else {
+              // Regular operators
+              switch (filter.operator) {
+                case "=":
+                case "!=":
+                case ">":
+                case ">=":
+                case "<":
+                case "<=":
+                  clause = `${filter.column} ${filter.operator} '${filter.value}'`
+                  break
+                case "BETWEEN":
+                  clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
+                  break
+                case "NOT_BETWEEN":
+                  clause = `${filter.column} NOT BETWEEN '${filter.value}' AND '${filter.value2}'`
+                  break
+                case "IN":
+                  const inValues = filter.value
+                    .split(",")
+                    .map((v: string) => `'${v.trim()}'`)
+                    .join(",")
+                  clause = `${filter.column} IN (${inValues})`
+                  break
+                case "NOT_IN":
+                  const notInValues = filter.value
+                    .split(",")
+                    .map((v: string) => `'${v.trim()}'`)
+                    .join(",")
+                  clause = `${filter.column} NOT IN (${notInValues})`
+                  break
+                case "LIKE":
+                  clause = `${filter.column} LIKE '%${filter.value}%'`
+                  break
+                case "NOT LIKE":
+                  clause = `${filter.column} NOT LIKE '%${filter.value}%'`
+                  break
+                case "STARTS_WITH":
+                  clause = `${filter.column} LIKE '${filter.value}%'`
+                  break
+                case "NOT_STARTS_WITH":
+                  clause = `${filter.column} NOT LIKE '${filter.value}%'`
+                  break
+                case "ENDS_WITH":
+                  clause = `${filter.column} LIKE '%${filter.value}'`
+                  break
+                case "NOT_ENDS_WITH":
+                  clause = `${filter.column} NOT LIKE '%${filter.value}'`
+                  break
+                case "IS NULL":
+                  clause = `${filter.column} IS NULL`
+                  break
+                case "IS NOT NULL":
+                  clause = `${filter.column} IS NOT NULL`
+                  break
+              }
             }
+            
             return clause
           })
           .filter(Boolean)
@@ -1241,16 +1290,42 @@ export default function TableDetailPage() {
             .map((group) => ({
               logic_operator: group.condition === "NOT" ? "AND" : group.condition,
               not: group.condition === "NOT", // Set NOT flag for NOT condition
-              filters: group.filters.map((filter) => ({
-                type: 'condition',
-                column: filter.column,
-                operator: mapOperatorToBackend(filter.operator),
-                value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
-                  ? [filter.value, filter.value2] 
-                  : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
-                    ? filter.value.split(',').map((v: string) => v.trim()) 
-                    : filter.value
-              }))
+              filters: group.filters.map((filter) => {
+                // Check if this is a date preset operator
+                const isDatePresetOperator = [
+                  "LAST_7_DAYS", 
+                  "LAST_30_DAYS", 
+                  "THIS_MONTH", 
+                  "LAST_MONTH",
+                  "LAST_3_MONTHS", 
+                  "LAST_6_MONTHS", 
+                  "THIS_YEAR", 
+                  "LAST_YEAR"
+                ].includes(filter.operator);
+                
+                // For date preset operators, we use the value and value2 directly
+                // as they were already calculated in the filter-builder component
+                if (isDatePresetOperator) {
+                  return {
+                    type: 'condition',
+                    column: filter.column,
+                    operator: 'between', // Use between operator for all date presets
+                    value: [filter.value, filter.value2]
+                  };
+                }
+                
+                // For regular operators
+                return {
+                  type: 'condition',
+                  column: filter.column,
+                  operator: mapOperatorToBackend(filter.operator),
+                  value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                    ? [filter.value, filter.value2] 
+                    : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                      ? filter.value.split(',').map((v: string) => v.trim()) 
+                      : filter.value
+                };
+              })
             })),
           // Add the between-group conditions as an array
           groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
@@ -1350,22 +1425,49 @@ export default function TableDetailPage() {
           filterGroups: cumulativeGroups.map((group: FilterGroup) => ({
             logic_operator: group.condition === "NOT" ? "AND" : group.condition,
             not: group.condition === "NOT",
-            filters: group.filters.map((filter: any) => ({
-              type: 'condition',
-              column: filter.column,
-              operator: mapOperatorToBackend(filter.operator),
-              value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
-                ? [filter.value, filter.value2] 
-                : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
-                  ? filter.value.split(',').map((v: string) => v.trim()) 
-                  : filter.value
-            }))
+            filters: group.filters.map((filter: any) => {
+              // Check if this is a date preset operator
+              const isDatePresetOperator = [
+                "LAST_7_DAYS", 
+                "LAST_30_DAYS", 
+                "THIS_MONTH", 
+                "LAST_MONTH",
+                "LAST_3_MONTHS", 
+                "LAST_6_MONTHS", 
+                "THIS_YEAR", 
+                "LAST_YEAR"
+              ].includes(filter.operator);
+              
+              // For date preset operators, we use the value and value2 directly
+              // as they were already calculated in the filter-builder component
+              if (isDatePresetOperator) {
+                return {
+                  type: 'condition',
+                  column: filter.column,
+                  operator: 'between', // Use between operator for all date presets
+                  value: [filter.value, filter.value2]
+                };
+              }
+              
+              // For regular operators
+              return {
+                type: 'condition',
+                column: filter.column,
+                operator: mapOperatorToBackend(filter.operator),
+                value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' 
+                  ? [filter.value, filter.value2] 
+                  : filter.operator === 'IN' || filter.operator === 'NOT_IN' 
+                    ? filter.value.split(',').map((v: string) => v.trim()) 
+                    : filter.value
+              };
+            })
           })),
           // Add between-group conditions for the groups we're including
           groupConditions: cumulativeBetweenConditions.length > 0 ? cumulativeBetweenConditions : ['AND'],
           // We only need the count, not the actual data
           page: 1,
-          pageSize: 1
+          pageSize: 1,
+          countOnly: true // Add a flag to indicate we only need the count
         };
         
         // Execute query for this cumulative set of filter groups
@@ -1397,14 +1499,16 @@ export default function TableDetailPage() {
     setFilterGroupRowCounts(counts);
   };
   
-  // Remove the useEffect that auto-recalculates on filter change
-  // We'll only calculate when "Run Query" is clicked
+  // Modify the useEffect to ensure we don't make duplicate API calls
   useEffect(() => {
     if (!loading && !executing && filterGroups.length > 0) {
-      // Initial load only - not on every filter change
-      if (Object.keys(filterGroupRowCounts).length === 0) {
+      // Wait a bit to ensure all filter values are properly set
+      // especially for date preset operators
+      const timer = setTimeout(() => {
         calculateFilterGroupRowCounts();
-      }
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [loading, executing]);
 
@@ -1446,7 +1550,16 @@ export default function TableDetailPage() {
       'BETWEEN': 'between',
       'NOT_BETWEEN': 'notBetween',
       'IS NULL': 'isNull',
-      'IS NOT NULL': 'isNotNull'
+      'IS NOT NULL': 'isNotNull',
+      // Add date preset operators
+      'LAST_7_DAYS': 'last7Days',
+      'LAST_30_DAYS': 'last30Days',
+      'THIS_MONTH': 'thisMonth',
+      'LAST_MONTH': 'lastMonth',
+      'LAST_3_MONTHS': 'last3Months',
+      'LAST_6_MONTHS': 'last6Months',
+      'THIS_YEAR': 'thisYear',
+      'LAST_YEAR': 'lastYear'
     }
     return operatorMap[operator] || operator
   }
@@ -1471,7 +1584,16 @@ export default function TableDetailPage() {
       'between': 'BETWEEN',
       'notBetween': 'NOT_BETWEEN',
       'isNull': 'IS NULL',
-      'isNotNull': 'IS NOT NULL'
+      'isNotNull': 'IS NOT NULL',
+      // Add date preset operators
+      'last7Days': 'LAST_7_DAYS',
+      'last30Days': 'LAST_30_DAYS',
+      'thisMonth': 'THIS_MONTH',
+      'lastMonth': 'LAST_MONTH',
+      'last3Months': 'LAST_3_MONTHS',
+      'last6Months': 'LAST_6_MONTHS',
+      'thisYear': 'THIS_YEAR',
+      'lastYear': 'LAST_YEAR'
     }
     return operatorMap[operator] || operator
   }

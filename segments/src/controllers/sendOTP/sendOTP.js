@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const emailService = require("../../services/emailService");
 require('dotenv').config();
 
+
 // Verify AWS SES connection on startup, but don't exit if it fails
 // This allows the application to start even if email service is temporarily unavailable
 emailService

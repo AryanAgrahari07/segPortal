@@ -148,12 +148,18 @@ class DataService {
     pageSize?: number,
     sortColumn?: string,
     sortOrder?: 'asc' | 'desc',
-    segmentId?: string
+    segmentId?: string,
+    countOnly?: boolean
   }) {
-    return this.makeRequest(`/table-data/${tableName}`, {
+    // Add a cache-busting parameter for count-only requests to prevent browser caching
+    const endpoint = params?.countOnly 
+      ? `/table-data/${tableName}?countOnly=true&_=${Date.now()}` 
+      : `/table-data/${tableName}`;
+    
+    return this.makeRequest(endpoint, {
       method: "POST",
       body: JSON.stringify(params || {}),
-    })
+    });
   }
 
 

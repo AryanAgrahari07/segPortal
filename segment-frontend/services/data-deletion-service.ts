@@ -10,12 +10,14 @@ export interface DeletionRequest {
   entry_created_timestamp: string;
   processed_by_admin_email?: string;
   processed_at_timestamp?: string;
+  deletion_sources: string;
 }
 
 export interface DeletionRequestInput {
   customer_email: string;
   customer_request_timestamp: string;
   notes?: string;
+  deletion_sources?: string;
 }
 
 export interface PaginationMeta {
