@@ -27,7 +27,7 @@ export default function DataDeletionPage() {
     <div className="space-y-6">
       <Card className="border-violet-200 dark:border-violet-800 shadow-sm">
         <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-200 dark:border-violet-800">
-          <CardTitle className="text-violet-900 dark:text-violet-100">Create Data Deletion Request</CardTitle>
+          <CardTitle className="text-violet-900 dark:text-violet-100">Create DSR Request</CardTitle>
           <CardDescription>
             Enter the details of the customer who has requested data deletion.
           </CardDescription>

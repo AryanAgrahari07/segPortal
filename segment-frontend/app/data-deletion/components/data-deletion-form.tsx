@@ -31,7 +31,7 @@ const formSchema = z.object({
   notes: z.string().optional(),
   shopify: z.boolean().default(false),
   braze: z.boolean().default(false),
-  cdr: z.boolean().default(false),
+  cdp: z.boolean().default(false),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -58,7 +58,7 @@ export default function DataDeletionForm() {
       customer_request_date: now,
       shopify: false,
       braze: false,
-      cdr: false,
+      cdp: false,
     },
   })
 
@@ -85,7 +85,7 @@ export default function DataDeletionForm() {
       const selectedSources: string[] = []
       if (data.shopify) selectedSources.push('Shopify')
       if (data.braze) selectedSources.push('Braze')
-      if (data.cdr) selectedSources.push('CDR')
+      if (data.cdp) selectedSources.push('CDP')
       const deletionSources = selectedSources.join(',')
       
       await dataDeletionService.createDeletionRequest({
@@ -110,7 +110,7 @@ export default function DataDeletionForm() {
         notes: "",
         shopify: false,
         braze: false,
-        cdr: false,
+        cdp: false,
       })
     } catch (error) {
       console.error("Error submitting deletion request:", error)
@@ -350,7 +350,7 @@ export default function DataDeletionForm() {
             
             <FormField
               control={form.control}
-              name="cdr"
+              name="cdp"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-violet-300 dark:border-violet-700 p-4">
                   <FormControl>
@@ -362,9 +362,9 @@ export default function DataDeletionForm() {
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>CDR</FormLabel>
+                    <FormLabel>CDP</FormLabel>
                     <FormDescription>
-                      Delete customer data from CDR
+                      Delete customer data from CDP
                     </FormDescription>
                   </div>
                 </FormItem>

@@ -52,44 +52,50 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(120,119,198,0.15),transparent_40%)] pointer-events-none"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,rgba(59,130,246,0.1),transparent_30%)] pointer-events-none"></div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-950 via-indigo-950 to-purple-950">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(147,112,219,0.18),transparent_40%)] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,rgba(79,70,229,0.15),transparent_30%)] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-grid-white/[0.02] pointer-events-none"></div>
       
-      <Card className="w-full max-w-md border border-violet-800/50 shadow-xl bg-slate-900/70 backdrop-blur-xl">
+      <Card className="w-full max-w-md border border-indigo-800/40 shadow-2xl bg-slate-900/80 backdrop-blur-xl">
         <CardHeader className="space-y-1 pb-6">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-              <LockKeyhole className="h-6 w-6 text-white" />
-            </div>
+          <div className="flex justify-center mb-8">
+          <Image 
+              src="/logo.jpg" 
+              alt="Logo" 
+              width={120} 
+              height={120} 
+              className="h-28 w-auto object-contain rounded-lg shadow-lg shadow-indigo-500/20"
+              priority
+            />
           </div>
           <CardTitle className="text-2xl font-bold text-center text-white">Welcome Back</CardTitle>
-          <CardDescription className="text-violet-200 text-center">
+          <CardDescription className="text-indigo-200 text-center">
             Enter your email to receive a secure verification code
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSendOTP} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-violet-300 font-medium">
+              <Label htmlFor="email" className="text-indigo-200 font-medium">
                 Email Address
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-violet-400" />
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-indigo-300" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-slate-800/50 border-violet-700 text-white placeholder:text-slate-500 focus:ring-2 focus:ring-violet-500 focus:border-transparent h-12"
+                  className="pl-10 bg-slate-800/60 border-indigo-600/50 text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent h-12"
                   required
                 />
               </div>
             </div>
             <Button 
               type="submit" 
-              className="w-full h-12 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 mt-2" 
+              className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 mt-2 shadow-lg shadow-indigo-900/30" 
               disabled={loading}
             >
               {loading ? (
@@ -106,11 +112,7 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center border-t border-violet-800 pt-4 pb-6">
-          <p className="text-sm text-violet-400">
-            Secure authentication powered by OTP verification
-          </p>
-        </CardFooter>
+        
       </Card>
     </div>
   )

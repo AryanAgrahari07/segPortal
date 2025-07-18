@@ -9,13 +9,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { Database, Play, Save, Plus, FilterIcon, Code, Calendar as CalendarIcon, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Clock, ChevronDown } from "lucide-react"
+import { Database, Play, Save, Plus, FilterIcon, Code, Calendar as CalendarIcon, ArrowLeft, Layers, Zap, Eye, Download, BarChart, PieChart, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Clock, ChevronDown, GripVertical, Loader2 } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { FilterGroupBuilder } from "@/components/segment/filter-group-builder"
 import { DataTable } from "@/components/segment/data-table"
 import { SqlEditor } from "@/components/segment/sql-editor"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -33,6 +35,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable"
 
 // Add calendar and popover imports
 import { Calendar } from "@/components/ui/calendar"
@@ -185,11 +192,13 @@ const validateSql = (sql: string, tableName: string): { isValid: boolean; error?
 function DatePicker({ 
   date, 
   setDate, 
-  className 
+  className,
+  isRequired = false
 }: { 
   date: string, 
   setDate: (date: string) => void,
-  className?: string 
+  className?: string,
+  isRequired?: boolean
 }) {
   // Handle converting string date to Date object for Calendar
   const selectedDate = date ? new Date(date) : undefined;
@@ -202,8 +211,12 @@ function DatePicker({
   // Handle date selection
   const handleSelect = (newDate: Date | undefined) => {
     if (newDate) {
-      // Format date as YYYY-MM-DD
-      const formattedDate = newDate.toISOString().split('T')[0];
+      // Format date as YYYY-MM-DD using local timezone to avoid date shifts
+      const year = newDate.getFullYear();
+      const month = String(newDate.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+      const day = String(newDate.getDate()).padStart(2, '0');
+      
+      const formattedDate = `${year}-${month}-${day}`;
       setDate(formattedDate);
     }
   };
@@ -233,6 +246,7 @@ function DatePicker({
           className={cn(
             "w-full justify-start text-left font-normal h-9 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30",
             !date && "text-muted-foreground",
+            !date && isRequired && "border-red-300 dark:border-red-700",
             className
           )}
         >
@@ -311,33 +325,37 @@ function TimePicker({
   const minuteOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
-      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-violet-300 dark:border-violet-700 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 focus-visible:ring-offset-2">
-        <Clock className="mr-2 h-4 w-4 text-violet-600" />
-        <div className="flex items-center">
+    <div className={cn("flex items-center", className)}>
+      <div className="w-full flex items-center h-9 px-2 py-2 rounded-md border border-violet-300 dark:border-violet-700 bg-transparent text-sm ring-offset-background focus-within:ring-2 focus-within:ring-violet-500/30 focus-within:ring-offset-2">
+        <Clock className="mr-1.5 h-4 w-4 text-violet-600 flex-shrink-0" />
+        <div className="flex items-center w-full justify-between">
           <Select value={hours.toString().padStart(2, '0')} onValueChange={handleHourChange}>
-            <SelectTrigger className="w-[4rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+            <SelectTrigger className="w-[3.5rem] h-7 px-1 text-center border-0 focus:ring-0 shadow-none">
               <SelectValue placeholder="HH" />
             </SelectTrigger>
             <SelectContent>
-              {hourOptions.map((hour) => (
-                <SelectItem key={hour} value={hour}>
-                  {hour}
-                </SelectItem>
-              ))}
+              <div className="max-h-[200px] overflow-y-auto">
+                {hourOptions.map((hour) => (
+                  <SelectItem key={hour} value={hour}>
+                    {hour}
+                  </SelectItem>
+                ))}
+              </div>
             </SelectContent>
           </Select>
-          <span className="mx-1">:</span>
+          <span className="mx-1 text-violet-500">:</span>
           <Select value={minutes.toString().padStart(2, '0')} onValueChange={handleMinuteChange}>
-            <SelectTrigger className="w-[4rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
+            <SelectTrigger className="w-[3.5rem] h-7 px-1 text-center border-0 focus:ring-0 shadow-none">
               <SelectValue placeholder="MM" />
             </SelectTrigger>
             <SelectContent>
-              {minuteOptions.map((minute) => (
-                <SelectItem key={minute} value={minute}>
-                  {minute}
-                </SelectItem>
-              ))}
+              <div className="max-h-[200px] overflow-y-auto">
+                {minuteOptions.map((minute) => (
+                  <SelectItem key={minute} value={minute}>
+                    {minute}
+                  </SelectItem>
+                ))}
+              </div>
             </SelectContent>
           </Select>
         </div>
@@ -458,6 +476,7 @@ export default function TableDetailPage() {
                   filters: group.filters.map((filter) => {
                     // Check if this is a date preset operator
                     const isDatePresetOperator = [
+                      "LAST_1_DAY",
                       "LAST_7_DAYS", 
                       "LAST_30_DAYS", 
                       "THIS_MONTH", 
@@ -465,7 +484,8 @@ export default function TableDetailPage() {
                       "LAST_3_MONTHS", 
                       "LAST_6_MONTHS", 
                       "THIS_YEAR", 
-                      "LAST_YEAR"
+                      "LAST_YEAR",
+                      "LAST_12_MONTHS"
                     ].includes(filter.operator);
                     
                     // For date preset operators, we use the value and value2 directly
@@ -475,7 +495,8 @@ export default function TableDetailPage() {
                         type: 'condition',
                         column: filter.column,
                         operator: 'between', // Use between operator for all date presets
-                        value: [filter.value, filter.value2]
+                        value: [filter.value, filter.value2],
+                        date_preset: mapOperatorToBackend(filter.operator) // Add the date_preset property
                       };
                     }
                     
@@ -606,6 +627,8 @@ export default function TableDetailPage() {
                 normalizedType = "DECIMAL";
                 break;
               case "DATE":
+                normalizedType = "DATE";
+                break;
               case "DATETIME":
               case "TIMESTAMP":
                 normalizedType = "TIMESTAMP";
@@ -666,7 +689,9 @@ export default function TableDetailPage() {
             const convertedGroups = segment.filter_groups.map((group) => ({
               id: group.id || `group-${Date.now()}-${Math.random()}`,
               name: group.group_name || "Unnamed Group",
-              condition: group.group_condition || "AND",
+              // The group_condition field in the database represents the condition between filters within the group
+              // If NOT flag is set, we need to use "NOT" as the condition, otherwise use the group_condition
+              condition: group.not ? "NOT" : (group.group_condition || "AND"),
               isCollapsed: false,
               isEnabled: true,
               filters:
@@ -688,6 +713,12 @@ export default function TableDetailPage() {
             // Set between-group conditions if available
             if (segment.groupConditions && Array.isArray(segment.groupConditions)) {
               setBetweenGroupConditions(segment.groupConditions);
+            } else if (segment.filter_groups.length > 1) {
+              // If groupConditions is not available, try to extract from between_group_condition
+              const extractedConditions = segment.filter_groups.slice(1).map(group => 
+                group.between_group_condition || "AND"
+              );
+              setBetweenGroupConditions(extractedConditions);
             }
             
             // Set segment data
@@ -716,15 +747,49 @@ export default function TableDetailPage() {
               // Format filters according to backend's expected format
               const filterQueryData = {
                 filterGroups: convertedGroups.map((group) => ({
-                  logic_operator: group.condition,
-                  filters: group.filters.map((filter: any) => ({
-                    type: 'condition',
-                    column: filter.column,
-                    operator: mapOperatorToBackend(filter.operator),
-                    value: filter.operator === 'BETWEEN' ? [filter.value, filter.value2] : 
-                           filter.operator === 'IN' ? filter.value.split(',').map((v: string) => v.trim()) :
-                           filter.value
-                  }))
+                  logic_operator: group.condition === "NOT" ? "AND" : group.condition,
+                  not: group.condition === "NOT", // Set NOT flag for NOT condition
+                  filters: group.filters.map((filter: any) => {
+                    // Check if this is a date preset operator
+                    const isDatePresetOperator = [
+                      "LAST_1_DAY",
+                      "LAST_7_DAYS", 
+                      "LAST_30_DAYS", 
+                      "THIS_MONTH", 
+                      "LAST_MONTH",
+                      "LAST_3_MONTHS", 
+                      "LAST_6_MONTHS", 
+                      "THIS_YEAR", 
+                      "LAST_YEAR",
+                      "LAST_12_MONTHS"
+                    ].includes(filter.operator);
+                    
+                    // For date preset operators, use between operator and pass both values as an array
+                    if (isDatePresetOperator) {
+                      // Check if we have valid date values
+                      const hasValidDates = filter.value && filter.value2;
+                      
+                      return {
+                        type: 'condition',
+                        column: filter.column,
+                        operator: 'between', // Use between operator for date presets
+                        value: hasValidDates ? [filter.value, filter.value2] : [], // Pass values if available, otherwise empty array
+                        date_preset: filter.date_preset || mapOperatorToBackend(filter.operator) // Use existing date_preset if available, otherwise map from operator
+                      };
+                    }
+                    
+                    // For regular operators
+                    return {
+                      type: 'condition',
+                      column: filter.column,
+                      operator: mapOperatorToBackend(filter.operator),
+                      value: filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN' ? 
+                             [filter.value, filter.value2] : 
+                             filter.operator === 'IN' || filter.operator === 'NOT_IN' ? 
+                             filter.value.split(',').map((v: string) => v.trim()) :
+                             filter.value
+                    };
+                  })
                 })),
                 // Include between-group conditions if available
                 groupConditions: segment.groupConditions && Array.isArray(segment.groupConditions) ? 
@@ -929,7 +994,6 @@ export default function TableDetailPage() {
         // Load regular table data
         try {
           const response = await dataService.getTableData(tableName, { page: pagination.page, pageSize: pagination.pageSize });
-          // console.log("Table data response:", response);
           
           // Handle nested response structure with rows property
           let tableRows = [];
@@ -965,7 +1029,6 @@ export default function TableDetailPage() {
             }
           }
           
-          // console.log("Processed table rows:", tableRows);
           setTableData(Array.isArray(tableRows) ? tableRows : []);
           setPagination(prevPagination => ({
             ...prevPagination,
@@ -1082,6 +1145,7 @@ export default function TableDetailPage() {
             
             // Special handling for date preset operators
             const isDatePresetOperator = [
+              "LAST_1_DAY",
               "LAST_7_DAYS", 
               "LAST_30_DAYS", 
               "THIS_MONTH", 
@@ -1089,14 +1153,48 @@ export default function TableDetailPage() {
               "LAST_3_MONTHS", 
               "LAST_6_MONTHS", 
               "THIS_YEAR", 
-              "LAST_YEAR"
+              "LAST_YEAR",
+              "LAST_12_MONTHS"
             ].includes(filter.operator);
             
             if (isDatePresetOperator) {
-              // For date preset operators, we'll use the BETWEEN operator
-              // The actual date values should have been set in the filter-builder component
-              if (filter.value && filter.value2) {
-                clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
+              // For date preset operators, use dynamic SQL with INTERVAL syntax
+              switch (filter.operator) {
+                case "LAST_1_DAY":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '1 day' AND CURRENT_DATE`
+                  break
+                case "LAST_7_DAYS":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 days' AND CURRENT_DATE`
+                  break
+                case "LAST_30_DAYS":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '29 days' AND CURRENT_DATE`
+                  break
+                case "THIS_MONTH":
+                  clause = `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE) AND LAST_DAY(CURRENT_DATE)`
+                  break
+                case "LAST_MONTH":
+                  clause = `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND LAST_DAY(CURRENT_DATE - INTERVAL '1 month')`
+                  break
+                case "LAST_3_MONTHS":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '89 days' AND CURRENT_DATE`
+                  break
+                case "LAST_6_MONTHS":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 months' AND CURRENT_DATE`
+                  break
+                case "THIS_YEAR":
+                  clause = `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE) AND DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year' - INTERVAL '1 day'`
+                  break
+                case "LAST_YEAR":
+                  clause = `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE - INTERVAL '1 year') AND DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 day'`
+                  break
+                case "LAST_12_MONTHS":
+                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '12 months' AND CURRENT_DATE`
+                  break
+                default:
+                  // Fall back to using the dynamically calculated dates if available
+                  if (filter.value && filter.value2) {
+                    clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
+                  }
               }
             } else {
               // Regular operators
@@ -1162,8 +1260,9 @@ export default function TableDetailPage() {
 
         if (filterClauses.length === 0) return ""
         
-        // Handle NOT condition for the group - use AND internally for conditions
-        // and wrap the entire group in NOT()
+        // For NOT condition groups, we join the filters with AND and then negate the entire group
+        // This is the correct logical implementation: NOT(A AND B AND C)
+        // For other conditions (AND, OR), we join the filters with the specified condition
         if (group.condition === "NOT") {
           return `NOT (${filterClauses.join(" AND ")})`
         }
@@ -1192,6 +1291,47 @@ export default function TableDetailPage() {
     return `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`
   }
 
+  // Function to ensure SQL has balanced parentheses and proper syntax
+  const ensureValidSqlSyntax = (sql: string): string => {
+    if (!sql) return sql;
+    
+    // Check for balanced parentheses
+    let openParens = 0;
+    let closeParens = 0;
+    
+    for (let i = 0; i < sql.length; i++) {
+      if (sql[i] === '(') openParens++;
+      if (sql[i] === ')') closeParens++;
+    }
+    
+    // Add missing closing parentheses
+    let fixedSql = sql;
+    if (openParens > closeParens) {
+      fixedSql += ')'.repeat(openParens - closeParens);
+    }
+    
+    // Ensure SQL ends with LIMIT clause
+    if (!fixedSql.toLowerCase().includes('limit')) {
+      fixedSql += ' LIMIT 1000';
+    }
+    
+    // Fix common syntax errors
+    // Ensure string values are properly quoted
+    fixedSql = fixedSql.replace(/(\w+)\s*=\s*([^'\s][^\s,)]*)/g, (match, col, val) => {
+      // Skip if val is a number or already quoted
+      if (!isNaN(Number(val)) || val.startsWith("'") || val.startsWith('"')) {
+        return match;
+      }
+      // Skip for special SQL keywords
+      if (['null', 'true', 'false', 'current_date', 'current_timestamp'].includes(val.toLowerCase())) {
+        return match;
+      }
+      return `${col} = '${val}'`;
+    });
+    
+    return fixedSql;
+  }
+
   const executeQuery = async () => {
     setExecuting(true);
     setTableLoading(true);
@@ -1204,7 +1344,10 @@ export default function TableDetailPage() {
 
       if (customSql) {
         // Handle custom SQL
-        const validation = validateSql(customSql, tableName);
+        // Validate and fix syntax issues
+        const validatedCustomSql = ensureValidSqlSyntax(customSql);
+        
+        const validation = validateSql(validatedCustomSql, tableName);
         if (!validation.isValid) {
           toast({
             title: "Invalid SQL",
@@ -1216,12 +1359,12 @@ export default function TableDetailPage() {
           return;
         }
         
-        setGeneratedSql(customSql);
+        setGeneratedSql(validatedCustomSql);
         
         // Execute query with custom SQL
         // The backend will handle parsing the SQL
         const customResponse = await dataService.getTableData(tableName, { 
-          customSql,
+          customSql: validatedCustomSql,
           filterGroups: [],
           page: 1, // Always use page 1 when executing a new query
           pageSize: pagination.pageSize,
@@ -1265,34 +1408,28 @@ export default function TableDetailPage() {
         setTableData(Array.isArray(customTableRows) ? customTableRows : []);
         setPagination(prevPagination => ({
           ...prevPagination,
-          page: paginationData.page,
-          pageSize: paginationData.pageSize,
+          page: 1,
           total: paginationData.total,
           totalPages: paginationData.totalPages
         }));
-                
-        toast({
-          title: "Query Executed",
-          description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
-        });
-
-        // Reset filter group row counts since we're using custom SQL
-        setFilterGroupRowCounts({});
       } else {
-        // Use existing filter groups
-        const sql = generateSqlFromFilters();
-        setGeneratedSql(sql);
+        // Generate SQL from filters
+        const generatedFilterSql = generateSqlFromFilters();
+        setGeneratedSql(generatedFilterSql);
         
-        // Format filters according to backend's expected format
+        // Format filters for API
         const filterQueryData = {
           filterGroups: filterGroups
             .filter((group) => group.isEnabled !== false)
             .map((group) => ({
+              // For NOT condition, we use AND as the internal logic operator
+              // and set the 'not' flag to true to indicate negation of the entire group
               logic_operator: group.condition === "NOT" ? "AND" : group.condition,
-              not: group.condition === "NOT", // Set NOT flag for NOT condition
+              not: group.condition === "NOT",
               filters: group.filters.map((filter) => {
                 // Check if this is a date preset operator
                 const isDatePresetOperator = [
+                  "LAST_1_DAY",
                   "LAST_7_DAYS", 
                   "LAST_30_DAYS", 
                   "THIS_MONTH", 
@@ -1300,7 +1437,8 @@ export default function TableDetailPage() {
                   "LAST_3_MONTHS", 
                   "LAST_6_MONTHS", 
                   "THIS_YEAR", 
-                  "LAST_YEAR"
+                  "LAST_YEAR",
+                  "LAST_12_MONTHS"
                 ].includes(filter.operator);
                 
                 // For date preset operators, we use the value and value2 directly
@@ -1310,7 +1448,8 @@ export default function TableDetailPage() {
                     type: 'condition',
                     column: filter.column,
                     operator: 'between', // Use between operator for all date presets
-                    value: [filter.value, filter.value2]
+                    value: [filter.value, filter.value2],
+                    date_preset: mapOperatorToBackend(filter.operator) // Add the date_preset property
                   };
                 }
                 
@@ -1327,19 +1466,16 @@ export default function TableDetailPage() {
                 };
               })
             })),
-          // Add the between-group conditions as an array
           groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'],
           page: 1, // Always use page 1 when executing a new query
           pageSize: pagination.pageSize,
-          segmentId: segmentId || undefined // Pass segmentId when executing filters
+          segmentId: segmentId || undefined // Pass segmentId when using filters
         };
         
-        // console.log("Executing query with filters:", filterQueryData);
-        
-        // Execute query
+        // Execute query with filters
         const filterResponse = await dataService.getTableData(tableName, filterQueryData);
         
-        // Handle response
+        // Process response
         let filterTableRows: any[] = [];
         let paginationData = {
           page: 1,
@@ -1376,31 +1512,33 @@ export default function TableDetailPage() {
         setTableData(Array.isArray(filterTableRows) ? filterTableRows : []);
         setPagination(prevPagination => ({
           ...prevPagination,
-          page: paginationData.page,
-          pageSize: paginationData.pageSize,
+          page: 1,
           total: paginationData.total,
           totalPages: paginationData.totalPages
         }));
-           
-        toast({
-          title: "Query Executed",
-          description: `Found ${paginationData.total} records, showing page ${paginationData.page} of ${paginationData.totalPages}`,
-        });
-        
-        // After main query execution, calculate row counts for each filter group
-        await calculateFilterGroupRowCounts();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error executing query:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to execute query",
+        description: "Failed to execute query. Please try again.",
         variant: "destructive",
       });
     } finally {
       setExecuting(false);
       setTableLoading(false);
     }
+  };
+
+  const resetSqlEditor = () => {
+    const generatedSql = generateSqlFromFilters();
+    setCustomSql(generatedSql);
+    setGeneratedSql(generatedSql);
+    
+    toast({
+      title: "SQL Reset",
+      description: "SQL reset to filter-generated query with dynamic date expressions",
+    });
   };
 
   // Function to calculate row counts for each filter group independently
@@ -1423,11 +1561,13 @@ export default function TableDetailPage() {
         
         const cumulativeQuery = {
           filterGroups: cumulativeGroups.map((group: FilterGroup) => ({
+            // Use the actual condition for the group, with special handling for NOT
             logic_operator: group.condition === "NOT" ? "AND" : group.condition,
             not: group.condition === "NOT",
             filters: group.filters.map((filter: any) => {
               // Check if this is a date preset operator
               const isDatePresetOperator = [
+                "LAST_1_DAY",
                 "LAST_7_DAYS", 
                 "LAST_30_DAYS", 
                 "THIS_MONTH", 
@@ -1435,17 +1575,18 @@ export default function TableDetailPage() {
                 "LAST_3_MONTHS", 
                 "LAST_6_MONTHS", 
                 "THIS_YEAR", 
-                "LAST_YEAR"
+                "LAST_YEAR",
+                "LAST_12_MONTHS"
               ].includes(filter.operator);
               
-              // For date preset operators, we use the value and value2 directly
-              // as they were already calculated in the filter-builder component
+              // For date preset operators, use between operator and pass both values as an array
               if (isDatePresetOperator) {
                 return {
                   type: 'condition',
                   column: filter.column,
-                  operator: 'between', // Use between operator for all date presets
-                  value: [filter.value, filter.value2]
+                  operator: 'between', // Use between operator for date presets
+                  value: [filter.value, filter.value2], // Pass both values as array
+                  date_preset: mapOperatorToBackend(filter.operator) // Pass the date preset
                 };
               }
               
@@ -1551,15 +1692,17 @@ export default function TableDetailPage() {
       'NOT_BETWEEN': 'notBetween',
       'IS NULL': 'isNull',
       'IS NOT NULL': 'isNotNull',
-      // Add date preset operators
-      'LAST_7_DAYS': 'last7Days',
-      'LAST_30_DAYS': 'last30Days',
-      'THIS_MONTH': 'thisMonth',
-      'LAST_MONTH': 'lastMonth',
-      'LAST_3_MONTHS': 'last3Months',
-      'LAST_6_MONTHS': 'last6Months',
-      'THIS_YEAR': 'thisYear',
-      'LAST_YEAR': 'lastYear'
+      // Add date preset operators with consistent naming convention
+      'LAST_1_DAY': 'last_1_day',
+      'LAST_7_DAYS': 'last_7_days',
+      'LAST_30_DAYS': 'last_30_days',
+      'THIS_MONTH': 'this_month',
+      'LAST_MONTH': 'last_month',
+      'LAST_3_MONTHS': 'last_90_days',
+      'LAST_6_MONTHS': 'last_6_months',
+      'LAST_12_MONTHS': 'last_12_months',
+      'THIS_YEAR': 'this_year',
+      'LAST_YEAR': 'last_year'
     }
     return operatorMap[operator] || operator
   }
@@ -1585,15 +1728,17 @@ export default function TableDetailPage() {
       'notBetween': 'NOT_BETWEEN',
       'isNull': 'IS NULL',
       'isNotNull': 'IS NOT NULL',
-      // Add date preset operators
-      'last7Days': 'LAST_7_DAYS',
-      'last30Days': 'LAST_30_DAYS',
-      'thisMonth': 'THIS_MONTH',
-      'lastMonth': 'LAST_MONTH',
-      'last3Months': 'LAST_3_MONTHS',
-      'last6Months': 'LAST_6_MONTHS',
-      'thisYear': 'THIS_YEAR',
-      'lastYear': 'LAST_YEAR'
+      // Add date preset operators with consistent naming convention
+      'last_1_day': 'LAST_1_DAY',
+      'last_7_days': 'LAST_7_DAYS',
+      'last_30_days': 'LAST_30_DAYS',
+      'this_month': 'THIS_MONTH',
+      'last_month': 'LAST_MONTH',
+      'last_90_days': 'LAST_3_MONTHS',
+      'last_6_months': 'LAST_6_MONTHS',
+      'last_12_months': 'LAST_12_MONTHS',
+      'this_year': 'THIS_YEAR',
+      'last_year': 'LAST_YEAR'
     }
     return operatorMap[operator] || operator
   }
@@ -1607,47 +1752,83 @@ export default function TableDetailPage() {
       });
       return;
     }
+    
+    if (!segmentData.startDate) {
+      toast({
+        title: "Error",
+        description: "Please select a start date in Execution Timing",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!segmentData.endDate) {
+      toast({
+        title: "Error",
+        description: "Please select an end date in Execution Timing",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setSaving(true);
     try {
       // Determine which filter groups to use
-      let segmentFilterGroups: FilterGroup[] = [];
-      let generatedSqlToSave: string;
-      let customSqlToSave: string | undefined;
-
-      if (customSql) {
-        // For custom SQL, we'll just save the SQL directly
-        generatedSqlToSave = customSql;
-        customSqlToSave = customSql;
-        
-        // We'll still need to provide filter groups structure even if empty
-        segmentFilterGroups = [];
-      } else {
-        // Use existing filter groups
-        segmentFilterGroups = [...filterGroups];
-        generatedSqlToSave = generateSqlFromFilters();
-        customSqlToSave = undefined;
-      }
-
+      let segmentFilterGroups: FilterGroup[] = [...filterGroups];
+      
+      // Generate SQL from filters if no custom SQL exists
+      const generatedFilterSql = generateSqlFromFilters();
+      
+      // Use custom SQL if it exists, otherwise use generated SQL
+      const sqlToSave = customSql || generatedFilterSql;
+      
+      // Validate the SQL before saving
+      const validatedSql = ensureValidSqlSyntax(sqlToSave);
+      
       // Convert our filter groups to API format
       const apiFilterGroups = segmentFilterGroups.map((group, index) => {
         // Determine if this is a NOT condition
         const isNotCondition = group.condition === "NOT";
         
+        // Get the between-group condition for this group
+        const betweenGroupCondition = index > 0 && index - 1 < betweenGroupConditions.length 
+          ? betweenGroupConditions[index - 1] 
+          : "AND";
+        
         return {
           group_name: group.name || `Group ${index + 1}`,
           group_order: index + 1,
-          group_condition: isNotCondition ? "AND" : group.condition,
+          // When saving a NOT condition group:
+          // 1. We store the actual condition (NOT)
+          // 2. We set the not flag to true to indicate negation
+          // 3. The backend will join filters with AND and then apply NOT to the entire group
+          group_condition: group.condition, // Use the actual condition directly
           not: isNotCondition, // Set NOT flag for NOT condition
-          between_group_condition: index > 0 && index - 1 < betweenGroupConditions.length 
-            ? betweenGroupConditions[index - 1] 
-            : "AND",
+          between_group_condition: betweenGroupCondition,
           filters: group.filters.map((filter: any, filterIndex: number) => {
             // Determine value format based on operator
             let filterValue = filter.value;
             let filterValue2 = filter.value2;
+            let datePreset = null;
             
-            if (filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN') {
+            // Check if this is a date preset operator
+            const isDatePresetOperator = [
+              "LAST_1_DAY",
+              "LAST_7_DAYS", 
+              "LAST_30_DAYS", 
+              "THIS_MONTH", 
+              "LAST_MONTH",
+              "LAST_3_MONTHS", 
+              "LAST_6_MONTHS", 
+              "THIS_YEAR", 
+              "LAST_YEAR",
+              "LAST_12_MONTHS"
+            ].includes(filter.operator);
+            
+            if (isDatePresetOperator) {
+              // For date presets, set the date_preset property
+              datePreset = mapOperatorToBackend(filter.operator);
+            } else if (filter.operator === 'BETWEEN' || filter.operator === 'NOT_BETWEEN') {
               filterValue = [filter.value, filter.value2];
               filterValue2 = undefined; // Not needed as we put both values in filterValue as array
             } else if (filter.operator === 'IN' || filter.operator === 'NOT_IN') {
@@ -1661,7 +1842,8 @@ export default function TableDetailPage() {
               filter_value: filterValue,
               filter_value_2: filterValue2,
               filter_order: filterIndex + 1,
-              is_active: true
+              is_active: true,
+              date_preset: datePreset
             };
           }),
         };
@@ -1694,8 +1876,8 @@ export default function TableDetailPage() {
           filterGroups: apiFilterGroups, // Include filter groups in config
           groupConditions: betweenGroupConditions.length > 0 ? betweenGroupConditions : ['AND'] // Use array format
         },
-        generated_sql: generatedSqlToSave,
-        custom_sql: customSqlToSave,
+        generated_sql: validatedSql, // Always save the SQL (custom or generated)
+        custom_sql: customSql ? validatedSql : null, // Only save as custom SQL if it was edited
         is_template: false,
         is_saved_table: true,
         filter_groups: apiFilterGroups,
@@ -1740,11 +1922,6 @@ export default function TableDetailPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const resetSqlEditor = () => {
-    setCustomSql('');
-    setGeneratedSql(generateSqlFromFilters());
   };
 
   if (loading) {
@@ -2107,272 +2284,310 @@ export default function TableDetailPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 gap-6 h-[calc(100vh-12rem)] overflow-hidden">
-            {/* Left Sidebar - Filters - 35% width */}
-            <div className="w-[30%] flex-shrink-0 flex flex-col h-full border-r border-primary/10 pr-4 overflow-hidden">
-              {/* Filter Groups Header */}
-              <Card className={cn("border mb-4 sticky top-0 z-10", gradientCardStyles({ variant: "primary" }))}>
-                <CardHeader className="py-3 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center space-x-2 text-base text-violet-900 dark:text-violet-100">
-                      <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center">
-                        <Layers className="h-3.5 w-3.5 text-violet-600" />
+          <div className="flex-1 h-[calc(100vh-12rem)] overflow-hidden">
+            <ResizablePanelGroup
+              direction="horizontal"
+              className="h-full rounded-lg border border-violet-200 dark:border-violet-800 overflow-hidden"
+            >
+              {/* Left Sidebar - Filters - Resizable panel */}
+              <ResizablePanel defaultSize={30} minSize={20} maxSize={50} className="flex flex-col h-full overflow-hidden">
+                <div className="flex-1 flex flex-col h-full overflow-hidden pr-2">
+                  {/* Filter Groups Header */}
+                  <Card className={cn("border mb-4 sticky top-0 z-10", gradientCardStyles({ variant: "primary" }))}>
+                    <CardHeader className="py-3 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center space-x-2 text-base text-violet-900 dark:text-violet-100">
+                          <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center">
+                            <Layers className="h-3.5 w-3.5 text-violet-600" />
+                          </div>
+                          <span>Filter Groups</span>
+                        </CardTitle>
+                        <div className="flex items-center space-x-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" className="h-7 w-7 p-0 rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white" onClick={addFilterGroup}>
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Add new filter group</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </div>
-                      <span>Filter Groups</span>
-                    </CardTitle>
-                    <div className="flex items-center space-x-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button size="sm" className="h-7 w-7 p-0 rounded-full bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white" onClick={addFilterGroup}>
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Add new filter group</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </div>
-                  {totalFilterCount > 0 && (
-                    <div className="text-sm text-muted-foreground">
-                      {totalFilterCount} total filter{totalFilterCount !== 1 ? "s" : ""} across {filterGroups.length}{" "}
-                      group{filterGroups.length !== 1 ? "s" : ""}
-                    </div>
-                  )}
-                </CardHeader>
-              </Card>
+                      {totalFilterCount > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          {totalFilterCount} total filter{totalFilterCount !== 1 ? "s" : ""} across {filterGroups.length}{" "}
+                          group{filterGroups.length !== 1 ? "s" : ""}
+                        </div>
+                      )}
+                    </CardHeader>
+                  </Card>
 
-              {/* Filter Groups - Scrollable */}
-              <div className="flex-1 overflow-y-auto pr-1 space-y-4 max-h-[calc(100vh-25rem)] custom-scrollbar pb-4">
-                {filterGroups.length === 0 ? (
-                  <Card className="border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/10">
-                    <CardContent className="text-center py-12">
-                      <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-violet-500/10 flex items-center justify-center">
-                        <FilterIcon className="h-8 w-8 text-violet-600 opacity-70" />
+                  {/* Filter Groups - Scrollable */}
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-4 max-h-[calc(100vh-25rem)] custom-scrollbar pb-4">
+                    {filterGroups.length === 0 ? (
+                      <Card className="border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/10">
+                        <CardContent className="text-center py-12">
+                          <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-violet-500/10 flex items-center justify-center">
+                            <FilterIcon className="h-8 w-8 text-violet-600 opacity-70" />
+                          </div>
+                          <h3 className="font-medium mb-2 text-violet-900 dark:text-violet-100">No filter groups yet</h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Create your first filter group to start building your segment
+                          </p>
+                          <Button onClick={addFilterGroup} className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Filter Group
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      filterGroups.map((group, index) => (
+                        <div key={group.id}>
+                          <FilterGroupBuilder
+                            group={group}
+                            columns={columns}
+                            onUpdate={(updates) => updateFilterGroup(group.id, updates)}
+                            onRemove={() => removeFilterGroup(group.id)}
+                            onDuplicate={() => duplicateFilterGroup(group.id)}
+                            rowCount={filterGroupRowCounts[group.id]}
+                          />
+                          {index < filterGroups.length - 1 && (
+                            <div className="flex items-center justify-center py-3">
+                              <Select
+                                value={betweenGroupConditions[index] || "AND"}
+                                onValueChange={(value) => updateBetweenGroupCondition(index, value)}
+                              >
+                                <SelectTrigger className="w-24 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="AND">AND</SelectItem>
+                                  <SelectItem value="OR">OR</SelectItem>
+                                  <SelectItem value="NOT">NOT</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Timing Configuration - Sticky Bottom */}
+                  <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20 mt-4 sticky bottom-0">
+                    <CardHeader className="py-3">
+                      <CardTitle className="flex items-center text-base text-violet-900 dark:text-violet-100">
+                        <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
+                          <CalendarIcon className="h-3.5 w-3.5 text-violet-600" />
+                        </div>
+                        Execution Timing
+                      </CardTitle>
+                      <CardDescription className="text-xs text-violet-500/70">
+                        Configure when this segment should be executed (required)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 pb-4">
+                      {/* Responsive layout that switches to single column on narrow widths */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="startDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
+                            Start Date <span className="text-red-500">*</span>
+                          </Label>
+                          <DatePicker 
+                            date={segmentData.startDate} 
+                            setDate={(date) => setSegmentData({ ...segmentData, startDate: date })}
+                            isRequired={true}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="endDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
+                            End Date <span className="text-red-500">*</span>
+                          </Label>
+                          <DatePicker 
+                            date={segmentData.endDate} 
+                            setDate={(date) => setSegmentData({ ...segmentData, endDate: date })}
+                            isRequired={true}
+                          />
+                        </div>
                       </div>
-                      <h3 className="font-medium mb-2 text-violet-900 dark:text-violet-100">No filter groups yet</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Create your first filter group to start building your segment
-                      </p>
-                      <Button onClick={addFilterGroup} className="bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Filter Group
-                      </Button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="startTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
+                            Start Time
+                          </Label>
+                          <TimePicker
+                            time={segmentData.startTime}
+                            setTime={(time) => setSegmentData({ ...segmentData, startTime: time })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="endTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
+                            End Time
+                          </Label>
+                          <TimePicker
+                            time={segmentData.endTime}
+                            setTime={(time) => setSegmentData({ ...segmentData, endTime: time })}
+                          />
+                        </div>
+                      </div>
+                      
+                      {(segmentData.startDate || segmentData.endDate || 
+                        segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && (
+                        <div className="mt-3 p-2 rounded-md bg-violet-500/10 border border-violet-200 dark:border-violet-800 text-xs">
+                          <div className="flex items-center text-violet-700 dark:text-violet-300">
+                            <Clock className="h-3.5 w-3.5 mr-1.5" />
+                            <span className="font-medium">Execution schedule:</span>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">
+                            {segmentData.startDate && segmentData.endDate ? 
+                              `From ${new Date(segmentData.startDate).toLocaleDateString()} to ${new Date(segmentData.endDate).toLocaleDateString()}` :
+                              segmentData.startDate ? 
+                                `Starting from ${new Date(segmentData.startDate).toLocaleDateString()}` :
+                                segmentData.endDate ? 
+                                  `Until ${new Date(segmentData.endDate).toLocaleDateString()}` : 
+                                  "No date constraints"
+                            }
+                            {(segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") }
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
-                ) : (
-                  filterGroups.map((group, index) => (
-                    <div key={group.id}>
-                      <FilterGroupBuilder
-                        group={group}
-                        columns={columns}
-                        onUpdate={(updates) => updateFilterGroup(group.id, updates)}
-                        onRemove={() => removeFilterGroup(group.id)}
-                        onDuplicate={() => duplicateFilterGroup(group.id)}
-                        rowCount={filterGroupRowCounts[group.id]}
-                      />
-                      {index < filterGroups.length - 1 && (
-                        <div className="flex items-center justify-center py-3">
-                          <Select
-                            value={betweenGroupConditions[index] || "AND"}
-                            onValueChange={(value) => updateBetweenGroupCondition(index, value)}
-                          >
-                            <SelectTrigger className="w-24 border-violet-300 dark:border-violet-700 focus-visible:ring-violet-500/30">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="AND">AND</SelectItem>
-                              <SelectItem value="OR">OR</SelectItem>
-                              <SelectItem value="NOT">NOT</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
+                </div>
+              </ResizablePanel>
+
+              {/* Resize handle with custom styling */}
+              <ResizableHandle 
+                className="w-1.5 bg-violet-200/50 dark:bg-violet-800/50 transition-colors hover:bg-violet-300 dark:hover:bg-violet-700 focus-visible:ring-violet-500/30"
+                withHandle 
+              />
+
+              {/* Right Side - Data View */}
+              <ResizablePanel defaultSize={70} className="overflow-y-auto space-y-4 pl-2">
+                {showSqlEditor && (
+                  <div className="p-4 border rounded-lg bg-background mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">SQL Editor</h3>
+                      {/* <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={resetSqlEditor}
+                        >
+                          Reset to Generated SQL
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={executeQuery}
+                          disabled={executing}
+                        >
+                          {executing ? "Executing..." : "Execute SQL"}
+                        </Button>
+                      </div> */}
                     </div>
-                  ))
+                    
+                    <SqlEditor
+                      sql={customSql || generateSqlFromFilters()}
+                      onChange={setCustomSql}
+                      onExecute={executeQuery}
+                      onReset={resetSqlEditor}
+                    />
+                  </div>
                 )}
-              </div>
 
-              {/* Timing Configuration - Sticky Bottom */}
-              <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20 mt-4 sticky bottom-0">
-                <CardHeader className="py-3">
-                  <CardTitle className="flex items-center text-base text-violet-900 dark:text-violet-100">
-                    <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
-                      <CalendarIcon className="h-3.5 w-3.5 text-violet-600" />
-                    </div>
-                    Execution Timing
-                  </CardTitle>
-                  <CardDescription className="text-xs text-violet-500/70">
-                    Configure when this segment should be executed
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 pb-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
-                        Start Date
-                      </Label>
-                      <DatePicker 
-                        date={segmentData.startDate} 
-                        setDate={(date) => setSegmentData({ ...segmentData, startDate: date })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
-                        End Date
-                      </Label>
-                      <DatePicker 
-                        date={segmentData.endDate} 
-                        setDate={(date) => setSegmentData({ ...segmentData, endDate: date })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="startTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
-                        Start Time
-                      </Label>
-                      <TimePicker
-                        time={segmentData.startTime}
-                        setTime={(time) => setSegmentData({ ...segmentData, startTime: time })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="endTime" className="text-xs mb-1 block text-violet-700 dark:text-violet-300 font-medium">
-                        End Time
-                      </Label>
-                      <TimePicker
-                        time={segmentData.endTime}
-                        setTime={(time) => setSegmentData({ ...segmentData, endTime: time })}
-                      />
-                    </div>
-                  </div>
-                  
-                  {(segmentData.startDate || segmentData.endDate || 
-                    segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && (
-                    <div className="mt-3 p-2 rounded-md bg-violet-500/10 border border-violet-200 dark:border-violet-800 text-xs">
-                      <div className="flex items-center text-violet-700 dark:text-violet-300">
-                        <Clock className="h-3.5 w-3.5 mr-1.5" />
-                        <span className="font-medium">Execution schedule:</span>
-                      </div>
-                      <p className="mt-1 text-muted-foreground">
-                        {segmentData.startDate && segmentData.endDate ? 
-                          `From ${new Date(segmentData.startDate).toLocaleDateString()} to ${new Date(segmentData.endDate).toLocaleDateString()}` :
-                          segmentData.startDate ? 
-                            `Starting from ${new Date(segmentData.startDate).toLocaleDateString()}` :
-                            segmentData.endDate ? 
-                              `Until ${new Date(segmentData.endDate).toLocaleDateString()}` : 
-                              "No date constraints"
-                        }
-                        {(segmentData.startTime !== "00:00" || segmentData.endTime !== "23:59") && 
-                          `, daily between ${segmentData.startTime} and ${segmentData.endTime}`}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Side - Data View - 65% width */}
-            <div className="w-[70%] overflow-y-auto space-y-4">
-              {showSqlEditor && (
-                <SqlEditor
-                  sql={customSql || generateSqlFromFilters()}
-                  onChange={setCustomSql}
-                  onExecute={executeQuery}
-                  onReset={resetSqlEditor}
-                />
-              )}
-
-              {/* Data Preview */}
-              <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20">
-                <CardHeader>
-                  <div className="flex items-center justify-between flex-col sm:flex-row gap-2">
-                    <CardTitle className="flex items-center text-violet-900 dark:text-violet-100">
-                      <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
-                        <Eye className="h-3.5 w-3.5 text-violet-600" />
-                      </div>
-                      Data Preview
-                    </CardTitle>
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
-                          <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{pagination.total}</span>
-                          <span className="text-xs text-muted-foreground">Overall Rows</span>
+                {/* Data Preview */}
+                <Card className="border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50/50 to-indigo-50/50 dark:from-violet-950/20 dark:to-indigo-950/20">
+                  <CardHeader>
+                    <div className="flex items-center justify-between flex-col sm:flex-row gap-2">
+                      <CardTitle className="flex items-center text-violet-900 dark:text-violet-100">
+                        <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center mr-2">
+                          <Eye className="h-3.5 w-3.5 text-violet-600" />
                         </div>
-                        <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
-                          <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{columns?.length || 0}</span>
-                          <span className="text-xs text-muted-foreground">Columns</span>
-                        </div>
-                        {hasEmailColumn && (
+                        Data Preview
+                      </CardTitle>
+                      <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="flex flex-wrap items-center justify-center gap-3">
                           <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
-                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{uniqueEmails !== null ? uniqueEmails : 0}</span>
-                            <span className="text-xs text-muted-foreground">Unique emails</span>
+                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{pagination.total.toLocaleString('en-US')}</span>
+                            <span className="text-xs text-muted-foreground">Overall Rows</span>
                           </div>
-                        )}
-                        {enabledFilterCount > 0 && (
                           <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
-                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{enabledFilterCount}</span>
-                            <span className="text-xs text-muted-foreground">
-                              filter group{enabledFilterCount !== 1 ? "s" : ""}
-                            </span>
+                            <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{(columns?.length || 0).toLocaleString('en-US')}</span>
+                            <span className="text-xs text-muted-foreground">Columns</span>
+                          </div>
+                          {hasEmailColumn && (
+                            <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                              <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{uniqueEmails !== null ? uniqueEmails.toLocaleString('en-US') : '0'}</span>
+                              <span className="text-xs text-muted-foreground">Unique emails</span>
+                            </div>
+                          )}
+                          {enabledFilterCount > 0 && (
+                            <div className="flex flex-col items-center px-4 py-2 bg-violet-500/10 rounded-md border border-violet-200 dark:border-violet-800">
+                              <span className="text-lg font-semibold text-violet-700 dark:text-violet-300">{enabledFilterCount.toLocaleString('en-US')}</span>
+                              <span className="text-xs text-muted-foreground">
+                                filter group{enabledFilterCount !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {tableData && tableData.length > 0 && columns && columns.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const timestamp = new Date().toISOString().replace(/:/g, '-').substring(0, 19);
+                                const filename = `${tableName}-export-${timestamp}.csv`;
+                                const columnNames = columns.map(col => col.name);
+                                dataService.exportTableDataToCSV(tableData, columnNames, filename);
+                              }}
+                              className="flex items-center gap-1 border-violet-300 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+                            >
+                              <Download className="h-4 w-4 text-violet-600" />
+                              Export Page
+                            </Button>
                           </div>
                         )}
                       </div>
-                      {tableData && tableData.length > 0 && columns && columns.length > 0 && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const timestamp = new Date().toISOString().replace(/:/g, '-').substring(0, 19);
-                              const filename = `${tableName}-export-${timestamp}.csv`;
-                              const columnNames = columns.map(col => col.name);
-                              dataService.exportTableDataToCSV(tableData, columnNames, filename);
-                            }}
-                            className="flex items-center gap-1 border-violet-300 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
-                          >
-                            <Download className="h-4 w-4 text-violet-600" />
-                            Export Page
-                          </Button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 sm:p-0">
-                    <div className="space-y-4">
-                      <div className="rounded-md border border-violet-200 dark:border-violet-800 overflow-hidden relative">
-                        {(tableLoading || executing) && (
-                          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="relative">
-                                {/* Spinner with gradient */}
-                                <div className="h-16 w-16 rounded-full border-4 border-violet-100 dark:border-violet-800/30 relative">
-                                  <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
-                                  <div className="absolute inset-1 rounded-full border-4 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.2s] animate-reverse"></div>
-                                  <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-500/20 to-indigo-500/20 animate-pulse"></div>
+                  </CardHeader>
+                  <CardContent className="p-0 sm:p-0">
+                      <div className="space-y-4">
+                        <div className="rounded-md border border-violet-200 dark:border-violet-800 overflow-hidden relative">
+                          {(tableLoading || executing) && (
+                            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="relative">
+                                  {/* Spinner with gradient */}
+                                  <div className="h-16 w-16 rounded-full border-4 border-violet-100 dark:border-violet-800/30 relative">
+                                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 dark:border-t-violet-400 animate-spin"></div>
+                                    <div className="absolute inset-1 rounded-full border-4 border-transparent border-b-indigo-500 dark:border-b-indigo-400 animate-spin animate-duration-[1.2s] animate-reverse"></div>
+                                    <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-500/20 to-indigo-500/20 animate-pulse"></div>
+                                  </div>
+                                  
+                                  {/* Progress bar animation */}
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-1 bg-violet-100 dark:bg-violet-800/30 rounded-full overflow-hidden">
+                                    <div className="h-full w-10 bg-gradient-to-r from-violet-600 to-indigo-500 rounded-full animate-progress"></div>
+                                  </div>
                                 </div>
-                                
-                                {/* Progress bar animation */}
-                                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-1 bg-violet-100 dark:bg-violet-800/30 rounded-full overflow-hidden">
-                                  <div className="h-full w-10 bg-gradient-to-r from-violet-600 to-indigo-500 rounded-full animate-progress"></div>
+                                <div className="text-center space-y-1">
+                                  <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                                    {executing ? "Executing query..." : "Loading data..."}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">This may take a moment</p>
                                 </div>
-                              </div>
-                              <div className="text-center space-y-1">
-                                <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
-                                  {executing ? "Executing query..." : "Loading data..."}
-                                </p>
-                                <p className="text-xs text-muted-foreground">This may take a moment</p>
                               </div>
                             </div>
-                          </div>
-                        )}
-                        <DataTable data={tableData || []} columns={columns || []} />
+                          )}
+                          <DataTable data={tableData || []} columns={columns || []} />
+                        </div>
+                        {renderPagination()}
                       </div>
-                      {renderPagination()}
-                    </div>
-                </CardContent>
-              </Card>
-            </div>
+                  </CardContent>
+                </Card>
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </div>
 
           {/* Save Segment Dialog */}
@@ -2386,12 +2601,12 @@ export default function TableDetailPage() {
                   {segmentId ? "Update Segment" : "Save Segment"}
                 </DialogTitle>
                 <DialogDescription>
-                  Give your segment a name and description to {segmentId ? "update" : "save"} it for future use.
+                  Give your segment a name and description to {segmentId ? "update" : "save"} it for future use. Start date and end date are required.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="segmentName" className="text-violet-700 dark:text-violet-300">Segment Name</Label>
+                  <Label htmlFor="segmentName" className="text-violet-700 dark:text-violet-300">Segment Name <span className="text-red-500">*</span></Label>
                   <Input
                     id="segmentName"
                     value={segmentData.name}

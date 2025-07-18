@@ -96,6 +96,7 @@ interface Filter {
   filter_value_2?: string
   filter_order: number
   is_active: boolean
+  date_preset?: string | null
   created_at: string
   updated_at: string
 }
@@ -262,7 +263,8 @@ class DataService {
           operator: filter.filter_operator,
           value: filter.filter_operator === 'between' ? 
             [filter.filter_value, filter.filter_value_2] : 
-            filter.filter_value
+            filter.filter_value,
+          date_preset: filter.date_preset // Ensure date_preset is included
         }))
       })) || [];
       
@@ -330,6 +332,7 @@ class DataService {
         filter_value_2?: string
         filter_order: number
         is_active?: boolean
+        date_preset?: string  
       }>
     }>
     generated_sql?: string
@@ -374,6 +377,45 @@ class DataService {
       }
     }
 
+    // Ensure date_preset is passed for each filter
+    if (segmentData.filter_groups) {
+      segmentData.filter_groups.forEach((group: { filters?: any[] }) => {
+        if (group.filters) {
+          group.filters.forEach((filter: { 
+            date_preset?: string | null; 
+            filter_operator?: string;
+          }) => {
+            // Make sure date_preset is properly handled
+            // If it's an empty string, set it to null
+            if (filter.date_preset === '') {
+              filter.date_preset = null;
+            }
+            
+            // If filter_operator is a date preset operator, ensure date_preset is set
+            if (filter.filter_operator && 
+                ['lastYear', 'last6Months', 'last3Months', 'lastMonth', 'lastWeek', 
+                 'thisYear', 'thisMonth', 'thisQuarter'].includes(filter.filter_operator)) {
+              
+              // Map legacy operator names to standardized preset names
+              const operatorToPresetMap: Record<string, string> = {
+                'lastYear': 'last_12_months',
+                'last6Months': 'last_6_months',
+                'last3Months': 'last_90_days',
+                'lastMonth': 'last_30_days',
+                'lastWeek': 'last_7_days',
+                'thisYear': 'this_year',
+                'thisMonth': 'this_month',
+                'thisQuarter': 'this_quarter'
+              };
+              
+              filter.date_preset = operatorToPresetMap[filter.filter_operator] || filter.date_preset;
+              console.log(`Setting date_preset to ${filter.date_preset} for operator ${filter.filter_operator}`);
+            }
+          });
+        }
+      });
+    }
+    
     // console.log("Sending segment data to API:", segmentData);
     
     return this.makeRequest("/create-segment", {
@@ -406,6 +448,7 @@ class DataService {
         filter_value_2?: string
         filter_order: number
         is_active?: boolean
+        date_preset?: string  
       }>
     }>
     generated_sql?: string
@@ -428,6 +471,45 @@ class DataService {
       if (formattedData.segment_config.end_date && formattedData.segment_config.end_time) {
         formattedData.end_time = `${formattedData.segment_config.end_date} ${formattedData.segment_config.end_time}`;
       }
+    }
+    
+    // Ensure date_preset is passed for each filter
+    if (formattedData.filter_groups) {
+      formattedData.filter_groups.forEach((group: { filters?: any[] }) => {
+        if (group.filters) {
+          group.filters.forEach((filter: { 
+            date_preset?: string | null; 
+            filter_operator?: string;
+          }) => {
+            // Make sure date_preset is properly handled
+            // If it's an empty string, set it to null
+            if (filter.date_preset === '') {
+              filter.date_preset = null;
+            }
+            
+            // If filter_operator is a date preset operator, ensure date_preset is set
+            if (filter.filter_operator && 
+                ['lastYear', 'last6Months', 'last3Months', 'lastMonth', 'lastWeek', 
+                 'thisYear', 'thisMonth', 'thisQuarter'].includes(filter.filter_operator)) {
+              
+              // Map legacy operator names to standardized preset names
+              const operatorToPresetMap: Record<string, string> = {
+                'lastYear': 'last_12_months',
+                'last6Months': 'last_6_months',
+                'last3Months': 'last_90_days',
+                'lastMonth': 'last_30_days',
+                'lastWeek': 'last_7_days',
+                'thisYear': 'this_year',
+                'thisMonth': 'this_month',
+                'thisQuarter': 'this_quarter'
+              };
+              
+              filter.date_preset = operatorToPresetMap[filter.filter_operator] || filter.date_preset;
+              console.log(`Setting date_preset to ${filter.date_preset} for operator ${filter.filter_operator}`);
+            }
+          });
+        }
+      });
     }
     
     return this.makeRequest(`/update-segment/${segmentId}`, {

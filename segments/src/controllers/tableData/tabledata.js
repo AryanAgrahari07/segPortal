@@ -1,5 +1,6 @@
 const { executeGoldSchemaQuery, executeAppSchemaQuery, clearSchemaContext } = require('../../database/database.js');
 const { getVisibleColumns, getVisibleColumnsForSegment } = require('../admin/column_visibility.js');
+const { calculateDateRangeFromPreset, normalizeDatePreset } = require('../../utils/dateUtils.js');
 require('dotenv').config();
 
 // Helper function to escape SQL string values
@@ -25,6 +26,69 @@ exports.buildFilterCondition = (filterGroup) => {
   // Process each filter in the group
   filterGroup.filters.forEach(filter => {
     if (filter.type === 'condition') {
+      // Check if this is a date filter with a preset
+      if (filter.date_preset && 
+          ((filter.column_data_type || '').toLowerCase() === 'date' || 
+           (filter.column_data_type || '').toLowerCase() === 'datetime' || 
+           (filter.column_data_type || '').toLowerCase() === 'timestamp')) {
+        
+        console.log(`Processing date filter with preset: ${filter.date_preset} for column ${filter.column}`);
+        console.log(`Column data type: ${filter.column_data_type}`);
+        
+        // Normalize the date preset name
+        const normalizedPreset = normalizeDatePreset(filter.date_preset);
+        console.log(`Normalized preset: ${normalizedPreset}`);
+        
+        // Calculate dynamic date range based on preset - returns Date objects
+        const { startDate, endDate } = calculateDateRangeFromPreset(normalizedPreset);
+        
+        console.log(`Raw calculated dates: startDate=${startDate}, endDate=${endDate}`);
+        
+        // Always use the dynamically calculated dates for date presets
+        if (startDate && endDate) {
+          // Format dates for SQL
+          const formattedStartDate = formatDateForSQL(startDate);
+          const formattedEndDate = formatDateForSQL(endDate);
+          
+          console.log(`Formatted dates: startDate=${formattedStartDate}, endDate=${formattedEndDate}`);
+          
+          // Use BETWEEN for date presets regardless of the original operator
+          const condition = `${filter.column} BETWEEN ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
+          console.log(`Generated dynamic date condition: ${condition}`);
+          conditions.push(condition);
+          return; // Skip the standard condition handling
+        }
+      }
+      
+      // Handle between operator with empty values but with date_preset
+      if (filter.operator === 'between' && filter.date_preset && 
+          (!filter.value || (Array.isArray(filter.value) && filter.value.length === 0 || 
+           (Array.isArray(filter.value) && (!filter.value[0] || !filter.value[1]))))) {
+        
+        console.log(`Processing between operator with date_preset: ${filter.date_preset} for column ${filter.column}`);
+        
+        // Normalize the date preset name
+        const normalizedPreset = normalizeDatePreset(filter.date_preset);
+        console.log(`Normalized preset: ${normalizedPreset}`);
+        
+        // Calculate dynamic date range based on preset
+        const { startDate, endDate } = calculateDateRangeFromPreset(normalizedPreset);
+        
+        if (startDate && endDate) {
+          // Format dates for SQL
+          const formattedStartDate = formatDateForSQL(startDate);
+          const formattedEndDate = formatDateForSQL(endDate);
+          
+          console.log(`Calculated dates for empty values: startDate=${formattedStartDate}, endDate=${formattedEndDate}`);
+          
+          // Use BETWEEN for date presets
+          const condition = `${filter.column} BETWEEN ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
+          console.log(`Generated dynamic date condition for empty values: ${condition}`);
+          conditions.push(condition);
+          return; // Skip the standard condition handling
+        }
+      }
+      
       // Handle basic filter condition
       let condition;
       switch (filter.operator) {
@@ -64,10 +128,19 @@ exports.buildFilterCondition = (filterGroup) => {
           }
           break;
         case 'between':
-          if (Array.isArray(filter.value) && filter.value.length >= 2) {
+          if (Array.isArray(filter.value) && filter.value.length >= 2 && filter.value[0] && filter.value[1]) {
             condition = `${filter.column} BETWEEN ${escapeSQLString(filter.value[0])} AND ${escapeSQLString(filter.value[1])}`;
+          } else if (Array.isArray(filter.value) && filter.value.length >= 1 && filter.value[0]) {
+            // If only first value is provided, use >= operator
+            condition = `${filter.column} >= ${escapeSQLString(filter.value[0])}`;
+          } else if (filter.value && filter.value2) {
+            // Support for non-array format
+            condition = `${filter.column} BETWEEN ${escapeSQLString(filter.value)} AND ${escapeSQLString(filter.value2)}`;
+          } else if (filter.value) {
+            // If only first value is provided in non-array format
+            condition = `${filter.column} >= ${escapeSQLString(filter.value)}`;
           } else {
-            condition = '1=1'; // Default true condition if value is not a proper array
+            condition = '1=1'; // Default true condition if values are missing
           }
           break;
         case 'isNull':

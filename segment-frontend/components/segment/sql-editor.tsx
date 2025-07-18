@@ -13,12 +13,21 @@ interface SqlEditorProps {
   onChange: (sql: string) => void
   onExecute: () => void
   onReset?: () => void
+  isCustomActive?: boolean
+  setIsCustomActive?: (active: boolean) => void
 }
 
-export function SqlEditor({ sql, onChange, onExecute, onReset }: SqlEditorProps) {
-  const [isCustom, setIsCustom] = useState(false)
+export function SqlEditor({ sql, onChange, onExecute, onReset, isCustomActive, setIsCustomActive }: SqlEditorProps) {
+  const [isCustom, setIsCustom] = useState(isCustomActive || false)
   const [originalSql, setOriginalSql] = useState(sql)
   const { toast } = useToast()
+
+  // Update local isCustom state when prop changes
+  useEffect(() => {
+    if (isCustomActive !== undefined) {
+      setIsCustom(isCustomActive)
+    }
+  }, [isCustomActive])
 
   // Update original SQL when the prop changes and we're not in custom mode
   useEffect(() => {
@@ -29,7 +38,12 @@ export function SqlEditor({ sql, onChange, onExecute, onReset }: SqlEditorProps)
 
   const handleSqlChange = (newSql: string) => {
     onChange(newSql)
+    
+    // Update local and parent custom state
     setIsCustom(true)
+    if (setIsCustomActive) {
+      setIsCustomActive(true)
+    }
   }
 
   const resetToGenerated = () => {
@@ -38,7 +52,13 @@ export function SqlEditor({ sql, onChange, onExecute, onReset }: SqlEditorProps)
     } else {
       onChange(originalSql)
     }
+    
+    // Update local and parent custom state
     setIsCustom(false)
+    if (setIsCustomActive) {
+      setIsCustomActive(false)
+    }
+    
     toast({
       title: "SQL Reset",
       description: "Reverted to auto-generated SQL from filters",

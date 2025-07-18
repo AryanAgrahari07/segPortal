@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { dataService } from "@/services/data-service"
-import { Loader2, ArrowLeft, Filter, Play, Edit, Trash2, Power } from "lucide-react"
+import { Loader2, ArrowLeft, Filter, Play, Edit, Trash2, Power, Clock } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +24,14 @@ import { SegmentData } from "@/services/data-service"
 import { useAuth } from "@/contexts/auth-context"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { 
+  calculateDateRangeFromPreset, 
+  formatDateForDisplay, 
+  getPresetDisplayText,
+  formatDateForSQL,
+  getDateRangeDisplayText,
+  normalizeDatePreset
+} from "@/lib/date-utils"
 
 export default function SegmentDetailPage() {
   const params = useParams()
@@ -38,6 +46,68 @@ export default function SegmentDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
+
+  // Function to process SQL with dynamic dates
+  const processSQL = (sql: string, filterGroups: any[]): string => {
+    if (!sql) return "No SQL generated";
+    
+    let processedSQL = sql;
+    
+    // Find all date filters with presets
+    const dateFilters: any[] = [];
+    filterGroups?.forEach(group => {
+      group.filters?.forEach((filter: any) => {
+        if (filter.date_preset && 
+            (filter.column_data_type === 'date' || 
+             filter.column_data_type === 'datetime' || 
+             filter.column_data_type === 'timestamp')) {
+          dateFilters.push(filter);
+        }
+      });
+    });
+    
+    // Process each date filter
+    dateFilters.forEach(filter => {
+      // Normalize the date preset name
+      const normalizedPreset = normalizeDatePreset(filter.date_preset);
+      
+      const { startDate, endDate } = calculateDateRangeFromPreset(normalizedPreset);
+      if (!startDate || !endDate) return;
+      
+      const formattedStartDate = formatDateForSQL(startDate);
+      const formattedEndDate = formatDateForSQL(endDate);
+      
+      // Replace dates in SQL based on filter operator
+      if (filter.filter_operator === 'between') {
+        // Create a pattern that will match the BETWEEN clause for this column
+        // This handles various formats of the date in SQL
+        const patternStr = `${filter.column_name}\\s+BETWEEN\\s+['"]?[^\\s'"]+'?\\s+AND\\s+['"]?[^\\s'"]+['"]?`;
+        const pattern = new RegExp(patternStr, 'gi');
+        
+        // Replace with the dynamic dates
+        processedSQL = processedSQL.replace(
+          pattern, 
+          `${filter.column_name} BETWEEN '${formattedStartDate}' AND '${formattedEndDate}'`
+        );
+      } else if (filter.filter_operator === 'greaterThanOrEqual' || filter.filter_operator === '>=') {
+        // Replace >= clause with dynamic start date
+        const pattern = new RegExp(`${filter.column_name}\\s*>=\\s*['"]?[^\\s'"]+['"]?`, 'gi');
+        processedSQL = processedSQL.replace(
+          pattern, 
+          `${filter.column_name} >= '${formattedStartDate}'`
+        );
+      } else if (filter.filter_operator === 'lessThanOrEqual' || filter.filter_operator === '<=') {
+        // Replace <= clause with dynamic end date
+        const pattern = new RegExp(`${filter.column_name}\\s*<=\\s*['"]?[^\\s'"]+['"]?`, 'gi');
+        processedSQL = processedSQL.replace(
+          pattern, 
+          `${filter.column_name} <= '${formattedEndDate}'`
+        );
+      }
+    });
+    
+    return processedSQL;
+  };
 
   // Check if the current user can manage this segment (creator or admin)
   const canManageSegment = user && segment && (user.email === segment.created_by || user.role === "admin")
@@ -328,25 +398,77 @@ export default function SegmentDetailPage() {
                       </div>
                     </div>
                     <div className="border rounded-md p-4 space-y-2 border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10">
-                      {group.filters?.length > 0 ? (
-                        group.filters.map((filter: any, filterIndex: number) => (
+                      {group.filters?.map((filter: any, filterIndex: number) => {
+                        // Calculate dynamic dates for date presets
+                        let displayValue = filter.filter_value;
+                        let displayValue2 = filter.filter_value_2;
+                        let isDynamic = false;
+                        let normalizedPreset: any = null;
+                        
+                        // Check if this is a date filter with a preset
+                        if (filter.date_preset && 
+                            (filter.column_data_type === 'date' || 
+                             filter.column_data_type === 'datetime' || 
+                             filter.column_data_type === 'timestamp')) {
+                          
+                          // Normalize the date preset name
+                          normalizedPreset = normalizeDatePreset(filter.date_preset);
+                          
+                          // Use dynamic dates from backend if available
+                          if (filter.dynamic_start_date && filter.dynamic_end_date) {
+                            displayValue = filter.dynamic_start_date;
+                            displayValue2 = filter.dynamic_end_date;
+                            isDynamic = true;
+                          } else {
+                            // Calculate current date range based on preset as fallback
+                            const { startDate, endDate } = calculateDateRangeFromPreset(normalizedPreset);
+                            
+                            if (startDate && endDate) {
+                              displayValue = formatDateForDisplay(startDate);
+                              displayValue2 = formatDateForDisplay(endDate);
+                              isDynamic = true;
+                            }
+                          }
+                        }
+                        
+                        return (
                           <div key={filter.id || filterIndex} className="text-sm">
                             <div className="flex items-center justify-between">
                               <span className="font-medium text-violet-700 dark:text-violet-300">{filter.column_name}</span>
                               <span className="text-muted-foreground">{filter.column_data_type}</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <Badge variant="outline" className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">{filter.filter_operator}</Badge>
-                              <span>
-                                {Array.isArray(filter.filter_value) 
-                                  ? filter.filter_value.join(', ')
-                                  : filter.filter_value}
-                              </span>
-                              {filter.filter_value_2 && (
-                                <>
-                                  <span>to</span>
-                                  <span>{filter.filter_value_2}</span>
-                                </>
+                              <Badge variant="outline" className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
+                                {filter.filter_operator}
+                              </Badge>
+                              
+                              {isDynamic ? (
+                                <div className="flex flex-col">
+                                  <div className="flex items-center">
+                                    <Badge className="bg-violet-500 hover:bg-violet-600">
+                                      {getPresetDisplayText(normalizedPreset)}
+                                    </Badge>
+                                    <Badge variant="outline" className="ml-2 text-xs bg-violet-100 dark:bg-violet-900/30">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Dynamic
+                                    </Badge>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground italic mt-1">
+                                    Currently: {displayValue} {filter.filter_operator === 'between' ? `to ${displayValue2}` : ''}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span>
+                                  {Array.isArray(filter.filter_value) 
+                                    ? filter.filter_value.join(', ')
+                                    : displayValue}
+                                  {displayValue2 && filter.filter_operator === 'between' && (
+                                    <>
+                                      <span> to </span>
+                                      <span>{displayValue2}</span>
+                                    </>
+                                  )}
+                                </span>
                               )}
                             </div>
                             {filterIndex < group.filters.length - 1 && (
@@ -357,17 +479,15 @@ export default function SegmentDetailPage() {
                               </div>
                             )}
                           </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No filters in this group</p>
-                      )}
+                        );
+                      })}
                     </div>
                     {index < segment.filter_groups.length - 1 && (
                       <div className="flex items-center justify-center py-2">
                         <Badge variant="outline" className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
-                          {segment.segment_config && (segment.segment_config as any).groupConditions?.[index] || 
-                           group.between_group_condition || 
-                           "AND"}
+                          {segment.groupConditions && segment.groupConditions[index] 
+                            ? segment.groupConditions[index]
+                            : (segment.filter_groups[index + 1] as any)?.between_group_condition || "AND"}
                         </Badge>
                       </div>
                     )}
@@ -379,15 +499,85 @@ export default function SegmentDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Dynamic Date Information Section */}
+          {/* {segment.filter_groups?.some(group => 
+            group.filters?.some(filter => filter.date_preset)
+          ) && (
+            <Card className="md:col-span-3 border-violet-200 dark:border-violet-800 mt-4">
+              <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
+                <CardTitle className="text-violet-900 dark:text-violet-100">
+                  <Clock className="h-5 w-5 inline-block mr-2" />
+                  Dynamic Date Information
+                </CardTitle>
+                <CardDescription>
+                  This segment contains dynamic date filters that update automatically
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {segment.filter_groups?.map((group, groupIndex) => (
+                    group.filters?.some(filter => filter.date_preset) && (
+                      <div key={groupIndex} className="space-y-2">
+                        <h3 className="font-medium text-violet-700 dark:text-violet-300">{group.group_name}</h3>
+                        <div className="border rounded-md p-4 space-y-3 border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10">
+                          {group.filters?.filter(filter => filter.date_preset).map((filter, filterIndex) => {
+                            const { startDate, endDate } = calculateDateRangeFromPreset(filter.date_preset as any);
+                            return (
+                              <div key={filterIndex} className="flex justify-between items-start">
+                                <div>
+                                  <span className="font-medium text-violet-700 dark:text-violet-300">
+                                    {filter.column_name}
+                                  </span>
+                                  <Badge className="ml-2 bg-gradient-to-r from-violet-600 to-indigo-500">
+                                    {getPresetDisplayText(filter.date_preset as any)}
+                                  </Badge>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    Filter will always use the most recent date range
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium">Current values:</div>
+                                  <div className="text-sm">
+                                    {startDate && formatDateForDisplay(startDate)}
+                                    {filter.filter_operator === 'between' && endDate && (
+                                      <> to {formatDateForDisplay(endDate)}</>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )} */}
+
           {/* SQL Preview */}
           <Card className="md:col-span-3 border-violet-200 dark:border-violet-800">
             <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40 border-b border-violet-100 dark:border-violet-800">
               <CardTitle className="text-violet-900 dark:text-violet-100">Generated SQL</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <pre className="bg-violet-50/50 dark:bg-violet-900/10 p-4 rounded-md overflow-x-auto text-sm border border-violet-100 dark:border-violet-800/30">
-                {segment.generated_sql || "No SQL generated"}
-              </pre>
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-violet-500 to-indigo-500"></div>
+                <pre className="bg-violet-50/50 dark:bg-violet-900/10 p-4 pl-6 rounded-md overflow-x-auto text-sm border border-violet-100 dark:border-violet-800/30 font-medium">
+                  {segment.filter_groups?.some(group => 
+                    group.filters?.some(filter => filter.date_preset)
+                  ) ? processSQL(segment.generated_sql, segment.filter_groups) : segment.generated_sql || "No SQL generated"}
+                </pre>
+                {segment.filter_groups?.some(group => 
+                  group.filters?.some(filter => filter.date_preset)
+                ) && (
+                  <div className="mt-2 text-xs text-muted-foreground italic flex items-center">
+                    <Clock className="h-3 w-3 mr-1 text-violet-500" />
+                    <span>This SQL includes dynamic date values based on current date</span>
+                  </div>
+                )}
+              </div>
             </CardContent>
             {segment.custom_sql && (
               <>

@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { LogOut, Database, Users, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -30,7 +31,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       show: user?.role === "admin",
     },
     {
-      name: "Data Deletion",
+      name: "DSR Request",
       href: user?.role === "admin" ? "/data-deletion/admin" : "/data-deletion",
       icon: Trash2,
       show: true, // Show to all users, but with different destinations
@@ -44,7 +45,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="w-[100%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">Segment Manager</h1>
+              <Link href="/dashboard">
+                <Image 
+                  src="/logo.jpg" 
+                  alt="Logo" 
+                  width={80} 
+                  height={80} 
+                  className="h-12 w-auto object-contain"
+                />
+              </Link>
               <nav className="flex space-x-4">
                 {navigation.map((item) => {
                   if (!item.show) return null

@@ -10,7 +10,7 @@ const { getAllSegments, getSegmentById, createSegment, updateSegment, deleteSegm
 const { addUser, getAllUsers, isAdmin, updateUserStatus, updateUserRole, logout } = require("../controllers/addUser/adduser.js");
 const { getTableMetadata, getTableData, getTableDataWithSegment, getUniqueColumnValues } = require("../controllers/tableData/tabledata.js");
 const { getColumnVisibility, updateColumnVisibility } = require("../controllers/admin/column_visibility.js");
-const { createDeletionRequest, getAllDeletionRequests, getPendingDeletionRequests, processDeletionRequest } = require("../controllers/dataDeletion/dataDeletion.js");
+const { createDeletionRequest, getAllDeletionRequests, getPendingDeletionRequests, processDeletionRequest, rejectDeletionRequest, getDeletionRequestApiLogs } = require("../controllers/dataDeletion/dataDeletion.js");
 
 // const filterGroupsController = require("../controllers/segments/filter_groups");
 // const filtersController = require("../controllers/segments/filters");
@@ -72,6 +72,10 @@ router.post("/data-deletion/requests", verifyToken, createDeletionRequest);
 router.get("/data-deletion/requests", verifyToken, getAllDeletionRequests);
 router.get("/data-deletion/pending-requests", verifyToken, isAdmin, getPendingDeletionRequests);
 router.post("/data-deletion/process/:request_id", verifyToken, isAdmin, processDeletionRequest);
+router.post("/data-deletion/process", verifyToken, isAdmin, processDeletionRequest);
+router.post("/data-deletion/reject/:request_id", verifyToken, isAdmin, rejectDeletionRequest);
+router.post("/data-deletion/reject", verifyToken, isAdmin, rejectDeletionRequest);
+router.get("/data-deletion/requests/:request_id/api-logs", verifyToken, isAdmin, getDeletionRequestApiLogs);
  
 router.get("/check", verifyToken, sanitizeInput, (req, res) => {
     res.status(200).json({

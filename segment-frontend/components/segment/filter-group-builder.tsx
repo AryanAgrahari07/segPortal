@@ -201,6 +201,21 @@ export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDupli
                   <Badge variant="secondary" className="text-xs">
                     {group.filters.length} filter{group.filters.length !== 1 ? "s" : ""}
                   </Badge>
+                  
+                  {/* Add explanation for NOT condition */}
+                  {/* {group.condition === "NOT" && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center text-xs text-muted-foreground cursor-help">
+                          <span className="ml-2 border-b border-dotted border-muted-foreground">NOT applied to all filters</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>When using NOT, all filters within this group are combined with AND, then the entire group is negated.</p>
+                        <p className="mt-1 text-xs">Example: NOT(filter1 AND filter2)</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )} */}
                 </div>
 
                 {/* Delete Button */}
@@ -277,6 +292,20 @@ export function FilterGroupBuilder({ group, columns, onUpdate, onRemove, onDupli
                       <Badge variant="secondary" className={`text-xs ${getConditionColor()}`}>
                         {group.condition === "NOT" ? "AND" : group.condition}
                       </Badge>
+                      {group.condition === "NOT" && index === 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="ml-1.5 cursor-help">
+                              <span className="text-xs text-muted-foreground border-b border-dotted border-muted-foreground">
+                                (inside NOT group)
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Filters inside a NOT group are combined with AND, then the entire result is negated.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   )}
                 </div>

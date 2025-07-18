@@ -12,8 +12,15 @@ export function formatValueForDisplay(value: any, type: string): string {
   switch (normalizedType) {
     case "BOOLEAN":
       return String(value);
-    case "TIMESTAMP":
     case "DATE":
+      try {
+        // For DATE type, only show the date portion without time
+        const date = new Date(value);
+        return date.toLocaleDateString();
+      } catch (e) {
+        return String(value);
+      }
+    case "TIMESTAMP":
     case "DATETIME":
       try {
         return new Date(value).toLocaleString();

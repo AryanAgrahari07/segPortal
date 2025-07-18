@@ -4,7 +4,7 @@ import { apiInterceptor } from "@/lib/api-interceptor"
 export interface DeletionRequest {
   request_id: string;
   customer_email: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'rejected';
   notes?: string;
   customer_request_timestamp: string;
   entry_created_timestamp: string;
@@ -35,7 +35,7 @@ export interface PaginatedResponse<T> {
   pagination: PaginationMeta;
 }
 
-export type StatusFilter = 'all' | 'pending' | 'completed' | 'failed';
+export type StatusFilter = 'all' | 'pending' | 'completed' | 'failed' | 'rejected';
 
 class DataDeletionService {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
@@ -89,6 +89,33 @@ class DataDeletionService {
       method: "POST"
     })
     return response.data
+  }
+
+  async processBulkDeletionRequests(requestIds: string[]): Promise<any> {
+    const response = await this.makeRequest(`/data-deletion/process`, {
+      method: "POST",
+      body: JSON.stringify({ request_ids: requestIds })
+    })
+    return response
+  }
+
+  async rejectDeletionRequest(requestId: string, rejectionReason: string): Promise<DeletionRequest> {
+    const response = await this.makeRequest(`/data-deletion/reject/${requestId}`, {
+      method: "POST",
+      body: JSON.stringify({ rejection_reason: rejectionReason })
+    })
+    return response.data
+  }
+
+  async rejectBulkDeletionRequests(requestIds: string[], rejectionReason: string): Promise<any> {
+    const response = await this.makeRequest(`/data-deletion/reject`, {
+      method: "POST",
+      body: JSON.stringify({ 
+        request_ids: requestIds,
+        rejection_reason: rejectionReason
+      })
+    })
+    return response
   }
 }
 

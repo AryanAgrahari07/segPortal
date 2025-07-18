@@ -25,9 +25,13 @@ import { dataService } from "@/services/data-service"
 import { useParams, useSearchParams } from "next/navigation"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { DateFilterControls } from "./date-filter-controls"
 
 // Import the Calendar component
 import { Calendar } from "@/components/ui/calendar"
+
+// Add import for date utils
+import { calculateDateRangeFromPreset, formatDate, DatePreset } from "@/lib/date-utils";
 
 interface Column {
   name: string
@@ -41,6 +45,7 @@ interface Filter {
   operator: string
   value: string
   value2?: string
+  date_preset?: string | null
 }
 
 interface FilterBuilderProps {
@@ -89,6 +94,7 @@ interface FilterBuilderProps {
       case "DATE":
         return [
           // Date preset operators at the top
+          { value: "LAST_1_DAY", label: "Last 1 Day" },
           { value: "LAST_7_DAYS", label: "Last 7 Days" },
           { value: "LAST_30_DAYS", label: "Last 30 Days" },
           { value: "THIS_MONTH", label: "This Month" },
@@ -97,6 +103,7 @@ interface FilterBuilderProps {
           { value: "LAST_6_MONTHS", label: "Last 6 Months" },
           { value: "THIS_YEAR", label: "This Year" },
           { value: "LAST_YEAR", label: "Last Year" },
+          { value: "LAST_12_MONTHS", label: "Last 12 Months" },
           // Standard operators after presets
           { value: "=", label: "On Date" },
           { value: "!=", label: "Not On Date" },
@@ -143,32 +150,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-// Simplified throttle function
-function throttle<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
-  let lastCall = 0;
-  let timeoutId: NodeJS.Timeout | null = null;
-  
-  return (...args: Parameters<T>) => {
-    const now = Date.now();
-    const timeSinceLastCall = now - lastCall;
-    
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
-    
-    if (timeSinceLastCall >= delay) {
-      lastCall = now;
-      fn(...args);
-    } else {
-      timeoutId = setTimeout(() => {
-        lastCall = Date.now();
-        fn(...args);
-        timeoutId = null;
-      }, delay - timeSinceLastCall);
-    }
-  };
-}
+
 
 // Add DatePicker component for timestamp fields
 function DatePicker({ 
@@ -320,209 +302,8 @@ function DatePicker({
   );
 }
 
-// Add TimePicker component for timestamp fields
-function TimePicker({
-  time,
-  setTime,
-  className
-}: {
-  time: string,
-  setTime: (time: string) => void,
-  className?: string
-}) {
-  // Parse current time into hours and minutes, with fallback to 00:00
-  const parseTimeString = (timeStr: string): [number, number] => {
-    if (!timeStr) return [0, 0];
-    const parts = timeStr.split(':').map(Number);
-    const hours = !isNaN(parts[0]) && parts[0] >= 0 && parts[0] < 24 ? parts[0] : 0;
-    const minutes = !isNaN(parts[1]) && parts[1] >= 0 && parts[1] < 60 ? parts[1] : 0;
-    return [hours, minutes];
-  };
 
-  const [hours, minutes] = parseTimeString(time);
-  
-  // Format numbers with leading zeros
-  const formatNumber = (num: number, digits: number = 2): string => {
-    return num.toString().padStart(digits, '0');
-  };
 
-  // Handle hour and minute changes
-  const handleHourChange = (newHour: string) => {
-    const hourNum = parseInt(newHour, 10);
-    if (!isNaN(hourNum) && hourNum >= 0 && hourNum < 24) {
-      setTime(`${formatNumber(hourNum)}:${formatNumber(minutes)}`);
-    }
-  };
-
-  const handleMinuteChange = (newMinute: string) => {
-    const minuteNum = parseInt(newMinute, 10);
-    if (!isNaN(minuteNum) && minuteNum >= 0 && minuteNum < 60) {
-      setTime(`${formatNumber(hours)}:${formatNumber(minuteNum)}`);
-    }
-  };
-
-  // Generate hour and minute options
-  const hourOptions = Array.from({ length: 24 }, (_, i) => formatNumber(i));
-  const minuteOptions = Array.from({ length: 60 }, (_, i) => formatNumber(i));
-
-  return (
-    <div className={cn("flex items-center gap-1", className)}>
-      <div className="w-full flex items-center h-9 px-3 py-2 rounded-md border border-purple-500/20 bg-transparent text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 focus-visible:ring-offset-2">
-        <Clock className="mr-2 h-4 w-4 flex-shrink-0 text-purple-500" />
-        <div className="flex items-center">
-          <Select value={formatNumber(hours)} onValueChange={handleHourChange}>
-            <SelectTrigger className="w-[3.5rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
-              <SelectValue placeholder="HH" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[200px]">
-              {hourOptions.map((hour) => (
-                <SelectItem key={hour} value={hour}>
-                  {hour}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="mx-1 text-purple-500">:</span>
-          <Select value={formatNumber(minutes)} onValueChange={handleMinuteChange}>
-            <SelectTrigger className="w-[3.5rem] h-7 px-2 text-center border-0 focus:ring-0 shadow-none">
-              <SelectValue placeholder="MM" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[200px]">
-              {minuteOptions.map((minute) => (
-                <SelectItem key={minute} value={minute}>
-                  {minute}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Add DatePresetSelector component for quick date range selection
-function DatePresetSelector({
-  onSelect,
-  className
-}: {
-  onSelect: (startDate: string, endDate: string) => void,
-  className?: string
-}) {
-  // Get current date for calculations
-  const today = new Date();
-  
-  // Format date as YYYY-MM-DD
-  const formatDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  
-  // Calculate date ranges
-  const presets = [
-    {
-      label: "Today",
-      getRange: () => {
-        return [formatDate(today), formatDate(today)];
-      }
-    },
-    {
-      label: "Yesterday",
-      getRange: () => {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        return [formatDate(yesterday), formatDate(yesterday)];
-      }
-    },
-    {
-      label: "Last 7 days",
-      getRange: () => {
-        const lastWeek = new Date(today);
-        lastWeek.setDate(lastWeek.getDate() - 6); // -6 to include today
-        return [formatDate(lastWeek), formatDate(today)];
-      }
-    },
-    {
-      label: "Last 30 days",
-      getRange: () => {
-        const lastMonth = new Date(today);
-        lastMonth.setDate(lastMonth.getDate() - 29); // -29 to include today
-        return [formatDate(lastMonth), formatDate(today)];
-      }
-    },
-    {
-      label: "This month",
-      getRange: () => {
-        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        return [formatDate(firstDayOfMonth), formatDate(today)];
-      }
-    },
-    {
-      label: "Last month",
-      getRange: () => {
-        const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-        return [formatDate(firstDayLastMonth), formatDate(lastDayLastMonth)];
-      }
-    },
-    {
-      label: "Last 3 months",
-      getRange: () => {
-        const threeMonthsAgo = new Date(today);
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        return [formatDate(threeMonthsAgo), formatDate(today)];
-      }
-    },
-    {
-      label: "Last 6 months",
-      getRange: () => {
-        const sixMonthsAgo = new Date(today);
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        return [formatDate(sixMonthsAgo), formatDate(today)];
-      }
-    },
-    {
-      label: "This year",
-      getRange: () => {
-        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
-        return [formatDate(firstDayOfYear), formatDate(today)];
-      }
-    },
-    {
-      label: "Last year",
-      getRange: () => {
-        const firstDayLastYear = new Date(today.getFullYear() - 1, 0, 1);
-        const lastDayLastYear = new Date(today.getFullYear() - 1, 11, 31);
-        return [formatDate(firstDayLastYear), formatDate(lastDayLastYear)];
-      }
-    }
-  ];
-
-  return (
-    <div className={cn("mt-2", className)}>
-      <Label className="text-xs text-muted-foreground mb-1.5 block">Quick Presets</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {presets.map((preset, index) => (
-          <Button
-            key={index}
-            variant="outline"
-            size="sm"
-            className="text-xs h-7 border-violet-300 dark:border-violet-700 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300"
-            onClick={() => {
-              const [start, end] = preset.getRange();
-              onSelect(start, end);
-            }}
-          >
-            <Clock className="mr-1 h-3 w-3 text-violet-600" />
-            {preset.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = false }: FilterBuilderProps) {
   const params = useParams();
@@ -561,82 +342,55 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
 
   // Add a function to handle date preset operators
   const handleDatePresetOperator = (operator: string) => {
-    // Get current date for calculations
-    const today = new Date();
-    
-    // Format date as YYYY-MM-DD
-    const formatDate = (date: Date): string => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+    // Map frontend operator to backend preset format
+    const operatorToPresetMap: Record<string, DatePreset> = {
+      "LAST_1_DAY": "last_1_day",
+      "LAST_7_DAYS": "last_7_days",
+      "LAST_30_DAYS": "last_30_days", 
+      "THIS_MONTH": "this_month", 
+      "LAST_MONTH": "last_month",
+      "LAST_3_MONTHS": "last_90_days", 
+      "LAST_6_MONTHS": "last_6_months", 
+      "THIS_YEAR": "this_year", 
+      "LAST_YEAR": "last_year",
+      "LAST_12_MONTHS": "last_12_months"
     };
     
-    // Calculate date range based on operator
-    let startDate = "";
-    let endDate = formatDate(today);
+    const preset = operatorToPresetMap[operator];
     
-    switch (operator) {
-      case "LAST_7_DAYS":
-        const lastWeek = new Date(today);
-        lastWeek.setDate(lastWeek.getDate() - 6); // -6 to include today
-        startDate = formatDate(lastWeek);
-        break;
-        
-      case "LAST_30_DAYS":
-        const lastMonth = new Date(today);
-        lastMonth.setDate(lastMonth.getDate() - 29); // -29 to include today
-        startDate = formatDate(lastMonth);
-        break;
-        
-      case "THIS_MONTH":
-        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        startDate = formatDate(firstDayOfMonth);
-        break;
-        
-      case "LAST_MONTH":
-        const firstDayLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-        startDate = formatDate(firstDayLastMonth);
-        endDate = formatDate(lastDayLastMonth);
-        break;
-        
-      case "LAST_3_MONTHS":
-        const threeMonthsAgo = new Date(today);
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        startDate = formatDate(threeMonthsAgo);
-        break;
-        
-      case "LAST_6_MONTHS":
-        const sixMonthsAgo = new Date(today);
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        startDate = formatDate(sixMonthsAgo);
-        break;
-        
-      case "THIS_YEAR":
-        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
-        startDate = formatDate(firstDayOfYear);
-        break;
-        
-      case "LAST_YEAR":
-        const firstDayLastYear = new Date(today.getFullYear() - 1, 0, 1);
-        const lastDayLastYear = new Date(today.getFullYear() - 1, 11, 31);
-        startDate = formatDate(firstDayLastYear);
-        endDate = formatDate(lastDayLastYear);
-        break;
+    if (!preset) {
+      console.error(`Unknown date preset operator: ${operator}`);
+      return;
     }
     
-    // For date preset operators, we'll use BETWEEN operator internally
-    // but keep the original operator for UI display purposes
+    // Use the shared utility function to calculate date range
+    const { startDate, endDate } = calculateDateRangeFromPreset(preset);
+    
+    console.log("startDate", startDate);
+    console.log("endDate", endDate);
+    // Format dates as YYYY-MM-DD
+    const formattedStartDate = startDate ? formatDate(startDate) : "";
+    const formattedEndDate = endDate ? formatDate(endDate) : "";
+    
+    console.log("formattedStartDate", formattedStartDate);    
+    console.log("formattedEndDate", formattedEndDate);
+    console.log(`Date preset ${operator} (${preset}) calculated:`, { 
+      startDate: formattedStartDate, 
+      endDate: formattedEndDate 
+    });
+    
+    // Update filter with calculated date values
     onUpdate({
-      value: startDate,
-      value2: endDate
+      value: formattedStartDate,
+      value2: formattedEndDate,
+      date_preset: preset
     });
   };
   
   // Add effect to handle date preset operators when they're selected
   useEffect(() => {
     const isDatePresetOperator = [
+      "LAST_1_DAY",
       "LAST_7_DAYS", 
       "LAST_30_DAYS", 
       "THIS_MONTH", 
@@ -644,14 +398,13 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
       "LAST_3_MONTHS", 
       "LAST_6_MONTHS", 
       "THIS_YEAR", 
-      "LAST_YEAR"
+      "LAST_YEAR",
+      "LAST_12_MONTHS"
     ].includes(filter.operator);
     
     if (isDatePresetOperator) {
-      // Use setTimeout to ensure this happens after any other state updates
-      setTimeout(() => {
-        handleDatePresetOperator(filter.operator);
-      }, 0);
+      // Call the handler directly to calculate and set date values
+      handleDatePresetOperator(filter.operator);
     }
   }, [filter.operator]);
 
@@ -846,6 +599,8 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
         return "number"
       case "DECIMAL":
         return "number"
+      case "DATE":
+        return "date"
       case "TIMESTAMP":
         return "date"
       default:
@@ -1100,12 +855,14 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
     const getPresetLabel = () => {
       // Only show preset indicator for preset operators
       const isDatePresetOperator = [
+        "LAST_1_DAY",
         "LAST_7_DAYS", 
         "LAST_30_DAYS", 
         "THIS_MONTH", 
         "LAST_MONTH",
         "LAST_3_MONTHS", 
         "LAST_6_MONTHS", 
+        "LAST_12_MONTHS",
         "THIS_YEAR", 
         "LAST_YEAR"
       ].includes(filter.operator);
@@ -1114,12 +871,14 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
       
       // Map operator to readable label
       const presetLabels: Record<string, string> = {
+        "LAST_1_DAY": "Last 1 Day",
         "LAST_7_DAYS": "Last 7 Days",
         "LAST_30_DAYS": "Last 30 Days",
         "THIS_MONTH": "This Month",
         "LAST_MONTH": "Last Month",
         "LAST_3_MONTHS": "Last 3 Months",
         "LAST_6_MONTHS": "Last 6 Months",
+        "LAST_12_MONTHS": "Last 12 Months",
         "THIS_YEAR": "This Year",
         "LAST_YEAR": "Last Year"
       };
@@ -1152,6 +911,83 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
             className="w-full"
           />
         )}
+      </div>
+    );
+  };
+
+  // Render the appropriate input based on column type and operator
+  const renderInput = () => {
+    const columnType = selectedColumn?.type || "";
+    
+    // For null/not null operators, no input needed
+    if (filter.operator === "IS NULL" || filter.operator === "IS NOT NULL") {
+      return null;
+    }
+    
+    // For date/timestamp columns, use the DateFilterControls component
+    if (columnType === "DATE" || columnType === "TIMESTAMP" || columnType === "DATETIME") {
+      return (
+        <DateFilterControls
+          filter={{
+            column_name: filter.column,
+            column_data_type: columnType.toLowerCase(),
+            filter_operator: filter.operator,
+            filter_value: filter.value || '',
+            filter_value_2: filter.value2 || '',
+            date_preset: filter.date_preset
+          }}
+          onUpdate={(updatedFilter) => {
+            onUpdate({
+              value: updatedFilter.filter_value,
+              value2: updatedFilter.filter_value_2,
+              date_preset: updatedFilter.date_preset
+            });
+          }}
+        />
+      );
+    }
+    
+    // For between operators, show two inputs
+    if (filter.operator === "BETWEEN" || filter.operator === "NOT_BETWEEN") {
+      return (
+        <div className="flex space-x-2 items-center">
+          <Input
+            type={getInputType(columnType)}
+            placeholder={getPlaceholder(columnType, "min")}
+            value={filter.value || ""}
+            onChange={(e) => onUpdate({ value: e.target.value })}
+            className="w-full"
+            disabled={disabled}
+          />
+          <span className="text-muted-foreground">and</span>
+          <Input
+            type={getInputType(columnType)}
+            placeholder={getPlaceholder(columnType, "max")}
+            value={filter.value2 || ""}
+            onChange={(e) => onUpdate({ value2: e.target.value })}
+            className="w-full"
+            disabled={disabled}
+          />
+        </div>
+      );
+    }
+    
+    // For IN operators, show a dropdown
+    if (isListType) {
+      return renderDropdown();
+    }
+    
+    // For other operators, show a direct input
+    return (
+      <div className="max-w-[280px]">
+        <Input
+          type={getInputType(columnType)}
+          value={filter.value}
+          onChange={(e) => onUpdate({ value: e.target.value })}
+          placeholder={getPlaceholder(columnType, filter.operator)}
+          className="h-9 text-sm w-full"
+          disabled={disabled}
+        />
       </div>
     );
   };
@@ -1261,7 +1097,7 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
               <div className="h-9 flex items-center text-sm text-muted-foreground px-3 bg-muted rounded-md max-w-[280px]">
                 No value needed
               </div>
-            ) : needsSecondValue && selectedColumn?.type === "TIMESTAMP" ? (
+            ) : needsSecondValue && (selectedColumn?.type === "TIMESTAMP" || selectedColumn?.type === "DATE") ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-[600px]">
                 <div className="space-y-2">
                   <Label className="text-xs block text-purple-600/80 dark:text-purple-400/80 font-medium">From</Label>
@@ -1299,7 +1135,7 @@ export function FilterBuilder({ filter, columns, onUpdate, onRemove, disabled = 
                   disabled={disabled}
                 />
               </div>
-            ) : selectedColumn?.type === "TIMESTAMP" ? (
+            ) : selectedColumn?.type === "TIMESTAMP" || selectedColumn?.type === "DATE" ? (
               <div className="max-w-[280px]">
                 {renderTimestampInput(
                   filter.value,
