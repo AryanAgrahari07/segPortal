@@ -87,10 +87,10 @@ const calculateDateRangeFromPreset = (preset) => {
 };
 
 /**
- * Generate SQL interval expression for a date preset
- * @param {string} preset - The date preset (e.g., 'last_7_days', 'last_30_days', etc.)
- * @param {string} columnName - The column name to use in the SQL expression
- * @returns {string} SQL expression using CURRENT_DATE and INTERVAL
+ * Generate SQL interval expression for a given date preset
+ * @param {string} preset - The date preset
+ * @param {string} columnName - The column name to use in the expression
+ * @returns {string} SQL interval expression
  */
 const generateSqlIntervalForPreset = (preset, columnName) => {
   switch(preset) {

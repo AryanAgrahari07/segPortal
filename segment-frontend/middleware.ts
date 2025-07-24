@@ -13,6 +13,16 @@ export function middleware(request: NextRequest) {
   
   // Allow access to public routes without authentication
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    // For OTP verification page, add cache control headers to prevent caching
+    if (pathname.startsWith('/verify-otp')) {
+      const response = NextResponse.next();
+      // Add cache control headers to prevent browser back navigation issues
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+      response.headers.set('Surrogate-Control', 'no-store');
+      return response;
+    }
     return NextResponse.next();
   }
 

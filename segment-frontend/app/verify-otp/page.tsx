@@ -2,7 +2,7 @@
 // \
 // "@/
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,45 +14,114 @@ import { authService } from "@/services/auth-service"
 import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
 
+// Utility functions for timer persistence
+const getStoredTimerData = (email: string) => {
+  try {
+    const storedData = localStorage.getItem(`otp_timer_${email}`);
+    if (storedData) {
+      const { expiryTime } = JSON.parse(storedData);
+      const now = new Date().getTime();
+      const remainingTime = Math.max(0, Math.floor((expiryTime - now) / 1000));
+      return remainingTime > 0 ? remainingTime : 0;
+    }
+  } catch (error) {
+    console.error("Error retrieving stored timer data:", error);
+  }
+  return 60; // Default to 60 seconds if no stored data
+};
+
+const storeTimerData = (email: string, seconds: number) => {
+  try {
+    const now = new Date().getTime();
+    const expiryTime = now + (seconds * 1000);
+    localStorage.setItem(`otp_timer_${email}`, JSON.stringify({
+      expiryTime,
+      startTime: now
+    }));
+  } catch (error) {
+    console.error("Error storing timer data:", error);
+  }
+};
+
 export default function VerifyOTPPage() {
   const [otp, setOtp] = useState("")
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState("")
-  const [timeLeft, setTimeLeft] = useState(60) // 60 seconds
+  const [timeLeft, setTimeLeft] = useState(60) // Default value, will be updated
   const [resendDisabled, setResendDisabled] = useState(true)
   const [resendLoading, setResendLoading] = useState(false)
+  const timerInitialized = useRef(false)
   
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const { login } = useAuth()
+  const { login, user } = useAuth()
 
   useEffect(() => {
+    // Check if user is already logged in
+    if (user) {
+      // Redirect to appropriate page based on user role
+      if (user.role === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
+      return
+    }
+
     const emailParam = searchParams?.get("email")
     if (!emailParam) {
       router.push("/login")
       return
     }
+    
     setEmail(emailParam)
     
-    // Enable resend after 30 seconds
-    const resendTimer = setTimeout(() => {
-      setResendDisabled(false)
-    }, 30000)
-    
-    return () => clearTimeout(resendTimer)
-  }, [searchParams, router])
+    // Only initialize the timer once
+    if (!timerInitialized.current) {
+      // Get stored timer value or default to 60 seconds
+      const storedTimeLeft = getStoredTimerData(emailParam);
+      setTimeLeft(storedTimeLeft);
+      
+      // If timer is already low, enable resend button
+      if (storedTimeLeft < 30) {
+        setResendDisabled(false);
+      } else {
+        // Schedule enabling the resend button
+        const timeToEnable = (storedTimeLeft - 30) * 1000; // Convert to milliseconds
+        const resendTimer = setTimeout(() => {
+          setResendDisabled(false)
+        }, Math.max(0, timeToEnable));
+        
+        return () => clearTimeout(resendTimer);
+      }
+      
+      timerInitialized.current = true;
+    }
+  }, [searchParams, router, user])
 
-  // OTP timer countdown
+  // OTP timer countdown with persistence
   useEffect(() => {
-    if (timeLeft <= 0) return
+    if (!email || timeLeft <= 0) return;
+    
+    // Store initial timer state
+    storeTimerData(email, timeLeft);
     
     const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1)
-    }, 1000)
+      setTimeLeft(prev => {
+        const newValue = prev - 1;
+        if (newValue <= 0) {
+          clearInterval(timer);
+          return 0;
+        }
+        // Update stored timer on each tick
+        storeTimerData(email, newValue);
+        return newValue;
+      });
+    }, 1000);
     
-    return () => clearInterval(timer)
-  }, [timeLeft])
+    return () => clearInterval(timer);
+  }, [timeLeft, email]);
   
   // Format time as MM:SS
   const formatTime = useCallback((seconds: number) => {
@@ -75,8 +144,9 @@ export default function VerifyOTPPage() {
       
       // Reset timer and disable resend button
       setTimeLeft(60)
+      storeTimerData(email, 60); // Store the new timer value
       setResendDisabled(true)
-      setTimeout(() => setResendDisabled(false), 60000)
+      setTimeout(() => setResendDisabled(false), 30000)
       
     } catch (error: any) {
       toast({
@@ -126,12 +196,19 @@ export default function VerifyOTPPage() {
       // Call login function with the extracted data
       login(response, token);
       
+      // Clear the stored timer data on successful login
+      localStorage.removeItem(`otp_timer_${email}`);
+      
       if(userRole === "admin") {
         // Redirect to dashboard
         router.push("/admin")
+        // Replace current history entry to prevent going back to OTP page
+        router.replace("/admin")
       } else {
         // Redirect to table page
         router.push("/dashboard")
+        // Replace current history entry to prevent going back to OTP page
+        router.replace("/dashboard")
       }
     } catch (error: any) {
       toast({

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Mail, LockKeyhole, ArrowRight } from "lucide-react"
 import { authService } from "@/services/auth-service"
+import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
 
 export default function LoginPage() {
@@ -18,6 +19,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (user) {
+      // Redirect to appropriate page based on user role
+      if (user.role === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
+    }
+  }, [user, router])
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,7 +109,7 @@ export default function LoginPage() {
             </div>
             <Button 
               type="submit" 
-              className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-md transition-all duration-200 flex items-center justify-center gap-2 mt-2 shadow-lg shadow-indigo-900/30" 
+              className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium transition-all duration-200 flex items-center justify-center gap-2 mt-2 shadow-lg shadow-indigo-900/30" 
               disabled={loading}
             >
               {loading ? (

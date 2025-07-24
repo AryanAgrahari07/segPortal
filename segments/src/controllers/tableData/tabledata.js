@@ -1,12 +1,55 @@
 const { executeGoldSchemaQuery, executeAppSchemaQuery, clearSchemaContext } = require('../../database/database.js');
 const { getVisibleColumns, getVisibleColumnsForSegment } = require('../admin/column_visibility.js');
-const { calculateDateRangeFromPreset, normalizeDatePreset } = require('../../utils/dateUtils.js');
+const { calculateDateRangeFromPreset, normalizeDatePreset, formatDateForSQL } = require('../../utils/dateUtils.js');
 require('dotenv').config();
 
 // Helper function to escape SQL string values
 const escapeSQLString = (str) => {
   if (str === null || str === undefined) return 'NULL';
   return `'${str.toString().replace(/'/g, "''")}'`;
+};
+
+/**
+ * Decode HTML entities in a string
+ * @param {string} str - String that may contain HTML entities
+ * @returns {string} String with decoded HTML entities
+ */
+const decodeHtmlEntities = (str) => {
+  if (!str || typeof str !== 'string') return str;
+  
+  // Create a map of common HTML entities to their corresponding characters
+  const entityMap = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&apos;': "'",
+    '&#x2F;': '/',
+    '&#47;': '/',
+    '&#x60;': '`',
+    '&#96;': '`',
+    '&#x3D;': '=',
+    '&#61;': '='
+  };
+  
+  // First, replace the mapped entities
+  let decoded = str.replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&apos;|&#x2F;|&#47;|&#x60;|&#96;|&#x3D;|&#61;/g, 
+    (match) => entityMap[match]);
+  
+  // Then handle any numeric entities like &#123;
+  decoded = decoded.replace(/&#(\d+);/g, (match, numStr) => {
+    const num = parseInt(numStr, 10);
+    return String.fromCharCode(num);
+  });
+  
+  // Finally handle hexadecimal entities like &#x1F;
+  decoded = decoded.replace(/&#x([0-9a-f]+);/gi, (match, numStr) => {
+    const num = parseInt(numStr, 16);
+    return String.fromCharCode(num);
+  });
+  
+  return decoded;
 };
 
 /**
@@ -52,8 +95,9 @@ exports.buildFilterCondition = (filterGroup) => {
           
           console.log(`Formatted dates: startDate=${formattedStartDate}, endDate=${formattedEndDate}`);
           
-          // Use BETWEEN for date presets regardless of the original operator
-          const condition = `${filter.column} BETWEEN ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
+          // Use BETWEEN or NOT BETWEEN based on operator
+          const betweenOperator = filter.operator === 'notBetween' ? 'NOT BETWEEN' : 'BETWEEN';
+          const condition = `${filter.column} ${betweenOperator} ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
           console.log(`Generated dynamic date condition: ${condition}`);
           conditions.push(condition);
           return; // Skip the standard condition handling
@@ -61,11 +105,11 @@ exports.buildFilterCondition = (filterGroup) => {
       }
       
       // Handle between operator with empty values but with date_preset
-      if (filter.operator === 'between' && filter.date_preset && 
+      if ((filter.operator === 'between' || filter.operator === 'notBetween') && filter.date_preset && 
           (!filter.value || (Array.isArray(filter.value) && filter.value.length === 0 || 
            (Array.isArray(filter.value) && (!filter.value[0] || !filter.value[1]))))) {
         
-        console.log(`Processing between operator with date_preset: ${filter.date_preset} for column ${filter.column}`);
+        console.log(`Processing ${filter.operator} operator with date_preset: ${filter.date_preset} for column ${filter.column}`);
         
         // Normalize the date preset name
         const normalizedPreset = normalizeDatePreset(filter.date_preset);
@@ -81,8 +125,9 @@ exports.buildFilterCondition = (filterGroup) => {
           
           console.log(`Calculated dates for empty values: startDate=${formattedStartDate}, endDate=${formattedEndDate}`);
           
-          // Use BETWEEN for date presets
-          const condition = `${filter.column} BETWEEN ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
+          // Use BETWEEN or NOT BETWEEN based on operator
+          const operator = filter.operator === 'notBetween' ? 'NOT BETWEEN' : 'BETWEEN';
+          const condition = `${filter.column} ${operator} ${escapeSQLString(formattedStartDate)} AND ${escapeSQLString(formattedEndDate)}`;
           console.log(`Generated dynamic date condition for empty values: ${condition}`);
           conditions.push(condition);
           return; // Skip the standard condition handling
@@ -139,6 +184,22 @@ exports.buildFilterCondition = (filterGroup) => {
           } else if (filter.value) {
             // If only first value is provided in non-array format
             condition = `${filter.column} >= ${escapeSQLString(filter.value)}`;
+          } else {
+            condition = '1=1'; // Default true condition if values are missing
+          }
+          break;
+        case 'notBetween':
+          if (Array.isArray(filter.value) && filter.value.length >= 2 && filter.value[0] && filter.value[1]) {
+            condition = `${filter.column} NOT BETWEEN ${escapeSQLString(filter.value[0])} AND ${escapeSQLString(filter.value[1])}`;
+          } else if (Array.isArray(filter.value) && filter.value.length >= 1 && filter.value[0]) {
+            // If only first value is provided, use < operator (not greater than or equal)
+            condition = `${filter.column} < ${escapeSQLString(filter.value[0])}`;
+          } else if (filter.value && filter.value2) {
+            // Support for non-array format
+            condition = `${filter.column} NOT BETWEEN ${escapeSQLString(filter.value)} AND ${escapeSQLString(filter.value2)}`;
+          } else if (filter.value) {
+            // If only first value is provided in non-array format
+            condition = `${filter.column} < ${escapeSQLString(filter.value)}`;
           } else {
             condition = '1=1'; // Default true condition if values are missing
           }
@@ -311,18 +372,22 @@ exports.getTableData = async (req, res) => {
     // Check if custom SQL is provided
     if (customSql) {
       try {
+        // Decode HTML entities in custom SQL to handle special characters like > and <
+        const decodedCustomSql = decodeHtmlEntities(customSql);
+        console.log("Decoded Custom SQL:", decodedCustomSql);
+        
         // Execute custom SQL with pagination
         // For direct SQL, we need to modify it to support pagination
         
         // Count total rows
-        const countSql = `SELECT COUNT(*) AS total FROM (${customSql}) AS countQuery`;
+        const countSql = `SELECT COUNT(*) AS total FROM (${decodedCustomSql}) AS countQuery`;
         const countResult = await executeGoldSchemaQuery(countSql);
         const total = countResult[0].total;
         
         // Count unique emails if email column exists
         let uniqueEmailCount = 0;
         if (emailColumnExists) {
-          const uniqueEmailSql = `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM (${customSql}) AS emailQuery`;
+          const uniqueEmailSql = `SELECT COUNT(DISTINCT ${emailColumnName}) AS unique_emails FROM (${decodedCustomSql}) AS emailQuery`;
           try {
             const uniqueEmailResult = await executeGoldSchemaQuery(uniqueEmailSql);
             uniqueEmailCount = uniqueEmailResult[0].unique_emails;
@@ -333,7 +398,7 @@ exports.getTableData = async (req, res) => {
         }
         
         // Apply pagination to the SQL
-        const paginatedSql = `SELECT * FROM (${customSql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
+        const paginatedSql = `SELECT * FROM (${decodedCustomSql}) AS dataQuery LIMIT ${pageSize} OFFSET ${offset}`;
         const data = await executeGoldSchemaQuery(paginatedSql);
         
         // Calculate total pages
@@ -666,10 +731,14 @@ exports.getTableDataWithSegment = async (req, res) => {
     let sql;
     if (segment.custom_sql) {
       // Use custom SQL if available
-      sql = segment.custom_sql;
+      // Decode HTML entities in custom SQL to handle special characters like > and <
+      sql = decodeHtmlEntities(segment.custom_sql);
+      console.log("Decoded Custom SQL (from segment):", sql);
     } else if (segment.generated_sql) {
       // Use generated SQL if available
-      sql = segment.generated_sql;
+      // Decode HTML entities in generated SQL to handle special characters like > and <
+      sql = decodeHtmlEntities(segment.generated_sql);
+      console.log("Decoded Generated SQL:", sql);
     } else {
       // Try to parse the segment config and generate SQL
       try {

@@ -38,6 +38,20 @@ export const apiInterceptor = {
   
   // Wrap fetch requests to handle auth errors
   async fetch(url: string, options: RequestInit = {}): Promise<Response> {
+    // Debug SQL in POST requests
+    if (options.method === 'POST' && options.body && typeof options.body === 'string' && options.body.includes('customSql')) {
+      try {
+        const body = JSON.parse(options.body);
+        if (body.customSql) {
+          console.log('API Interceptor - Custom SQL before fetch:', body.customSql);
+          console.log('Contains > character:', body.customSql.includes('>'));
+          console.log('Contains &gt; entity:', body.customSql.includes('&gt;'));
+        }
+      } catch (e) {
+        console.error('Error parsing request body:', e);
+      }
+    }
+    
     const response = await fetch(url, options);
     
     // Handle unauthorized responses

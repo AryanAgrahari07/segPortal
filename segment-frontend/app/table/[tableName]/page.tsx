@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cva } from "class-variance-authority"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -193,12 +193,16 @@ function DatePicker({
   date, 
   setDate, 
   className,
-  isRequired = false
+  isRequired = false,
+  minDate = undefined,
+  maxDate = undefined
 }: { 
   date: string, 
   setDate: (date: string) => void,
   className?: string,
-  isRequired?: boolean
+  isRequired?: boolean,
+  minDate?: string | undefined,
+  maxDate?: string | undefined
 }) {
   // Handle converting string date to Date object for Calendar
   const selectedDate = date ? new Date(date) : undefined;
@@ -207,6 +211,10 @@ function DatePicker({
   // Generate years for dropdown (10 years before and after current year)
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
+  // Convert string dates to Date objects for calendar component
+  const minDateObj = minDate ? new Date(minDate) : undefined;
+  const maxDateObj = maxDate ? new Date(maxDate) : undefined;
 
   // Handle date selection
   const handleSelect = (newDate: Date | undefined) => {
@@ -278,6 +286,12 @@ function DatePicker({
           defaultMonth={month}
           onMonthChange={setMonth}
           initialFocus
+          disabled={(date) => {
+            // Disable dates before minDate or after maxDate
+            if (minDateObj && date < minDateObj) return true;
+            if (maxDateObj && date > maxDateObj) return true;
+            return false;
+          }}
           className="border-none shadow-none"
           classNames={{
             caption: "flex justify-center py-2 relative items-center",
@@ -286,7 +300,8 @@ function DatePicker({
             day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 hover:bg-violet-100 dark:hover:bg-violet-900/20",
             day_selected: "bg-violet-600 text-white hover:bg-violet-500 hover:text-white focus:bg-violet-600 focus:text-white",
             day_today: "bg-violet-100 text-violet-700 dark:bg-violet-800/30 dark:text-violet-300",
-            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-violet-600"
+            head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem] text-violet-600",
+            day_disabled: "text-muted-foreground opacity-50 hover:bg-transparent"
           }}
         />
       </PopoverContent>
@@ -408,11 +423,39 @@ export default function TableDetailPage() {
     total: 0
   })
 
-  useEffect(() => {
-    loadTableData()
-  }, [tableName, segmentId])
+  const initialLoad = useRef(true);
 
+  // Load table data on mount
   useEffect(() => {
+    const initData = async () => {
+      await loadTableData();
+      initialLoad.current = false; // Mark initial load as complete
+    };
+    
+    initData();
+  }, [tableName, segmentId]);
+
+  // Effect to update SQL when filters change (if not in custom mode)
+  useEffect(() => {
+    // Only update if not in custom mode or if custom SQL is the same as generated SQL
+    if (!customSql || customSql === generatedSql) {
+      const newGeneratedSql = generateSqlFromFilters();
+      setGeneratedSql(newGeneratedSql);
+      
+      // If not in custom mode, also update the customSql to match
+      if (!customSql || customSql === generatedSql) {
+        setCustomSql(newGeneratedSql);
+      }
+    }
+  }, [filterGroups, betweenGroupConditions]);
+
+  // Effect for pagination changes - load new page when pagination changes
+  useEffect(() => {
+    // Skip the first render since loadTableData will handle it
+    if (initialLoad.current) {
+      return;
+    }
+    
     // Only execute query when pagination changes, but don't reset page number here
     // This effect is for pagination navigation only
     if (!loading) { // Prevent initial double-loading
@@ -425,7 +468,8 @@ export default function TableDetailPage() {
               customSql,
               filterGroups: [],
               page: pagination.page,
-              pageSize: pagination.pageSize
+              pageSize: pagination.pageSize,
+              segmentId: segmentId || undefined // Include segment ID if it exists
             });
             
             // Process response
@@ -575,7 +619,7 @@ export default function TableDetailPage() {
       
       fetchPageData();
     }
-  }, [pagination.page, pagination.pageSize])
+  }, [pagination.page, pagination.pageSize, tableName, segmentId]);
 
   const loadTableData = async () => {
     try {
@@ -736,6 +780,74 @@ export default function TableDetailPage() {
             if (segment.custom_sql) {
               setCustomSql(segment.custom_sql);
               setGeneratedSql(segment.custom_sql);
+              
+              // If custom SQL is available, use it instead of filter groups
+              try {
+                console.log("Loading table data with custom SQL from segment");
+                
+                const customSqlResponse = await dataService.getTableData(tableName, {
+                  customSql: segment.custom_sql,
+                  page: pagination.page,
+                  pageSize: pagination.pageSize,
+                  segmentId: segmentId || undefined // Pass segmentId to the backend
+                });
+                
+                console.log("Table data response with custom SQL:", customSqlResponse);
+                
+                // Process the response
+                let tableRows = [];
+                let paginationData = {
+                  page: pagination.page,
+                  pageSize: pagination.pageSize,
+                  total: 0,
+                  totalPages: 1
+                };
+                
+                if (customSqlResponse && typeof customSqlResponse === 'object') {
+                  if (customSqlResponse.success && customSqlResponse.data) {
+                    if (customSqlResponse.data.rows) {
+                      tableRows = customSqlResponse.data.rows;
+                    }
+                    
+                    // Extract pagination info
+                    if (customSqlResponse.data.pagination) {
+                      paginationData = customSqlResponse.data.pagination;
+                    }
+                    
+                    // Get unique email count if available
+                    if (customSqlResponse.data.uniqueEmails !== undefined) {
+                      setUniqueEmails(customSqlResponse.data.uniqueEmails);
+                      setHasEmailColumn(true);
+                    }
+                  } else if (customSqlResponse.rows) {
+                    tableRows = customSqlResponse.rows;
+                  } else if (Array.isArray(customSqlResponse)) {
+                    tableRows = customSqlResponse;
+                  }
+                }
+                
+                setTableData(Array.isArray(tableRows) ? tableRows : []);
+                setPagination(prevPagination => ({
+                  ...prevPagination,
+                  page: paginationData.page,
+                  pageSize: paginationData.pageSize,
+                  total: paginationData.total,
+                  totalPages: paginationData.totalPages
+                }));
+                
+                // Exit early since we've loaded data with custom SQL
+                setLoading(false);
+                setTableLoading(false);
+                return;
+              } catch (customSqlError) {
+                console.error("Error loading table data with custom SQL:", customSqlError);
+                toast({
+                  title: "Error",
+                  description: "Failed to load table data with custom SQL, falling back to filters",
+                  variant: "destructive",
+                });
+                // Continue with filter-based loading as fallback
+              }
             } else if (segment.generated_sql) {
               setGeneratedSql(segment.generated_sql);
             }
@@ -1129,166 +1241,137 @@ export default function TableDetailPage() {
   }
 
   const generateSqlFromFilters = () => {
-    if (filterGroups.length === 0) {
-      return `SELECT * FROM ${tableName} LIMIT 1000`
+    if (!filterGroups || filterGroups.length === 0) {
+      return `SELECT * FROM ${tableName}`;
     }
 
-    let whereClause = ""
-    const enabledGroups = filterGroups.filter((group) => group.isEnabled !== false)
-    const groupClauses = enabledGroups
-      .map((group) => {
-        if (group.filters.length === 0) return ""
+    // Filter out disabled groups
+    const enabledGroups = filterGroups.filter(group => group.isEnabled !== false);
+    
+    if (enabledGroups.length === 0) {
+      return `SELECT * FROM ${tableName}`;
+    }
 
-        const filterClauses = group.filters
-          .map((filter) => {
-            let clause = ""
-            
-            // Special handling for date preset operators
-            const isDatePresetOperator = [
-              "LAST_1_DAY",
-              "LAST_7_DAYS", 
-              "LAST_30_DAYS", 
-              "THIS_MONTH", 
-              "LAST_MONTH",
-              "LAST_3_MONTHS", 
-              "LAST_6_MONTHS", 
-              "THIS_YEAR", 
-              "LAST_YEAR",
-              "LAST_12_MONTHS"
-            ].includes(filter.operator);
-            
-            if (isDatePresetOperator) {
-              // For date preset operators, use dynamic SQL with INTERVAL syntax
-              switch (filter.operator) {
-                case "LAST_1_DAY":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '1 day' AND CURRENT_DATE`
-                  break
-                case "LAST_7_DAYS":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 days' AND CURRENT_DATE`
-                  break
-                case "LAST_30_DAYS":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '29 days' AND CURRENT_DATE`
-                  break
-                case "THIS_MONTH":
-                  clause = `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE) AND LAST_DAY(CURRENT_DATE)`
-                  break
-                case "LAST_MONTH":
-                  clause = `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND LAST_DAY(CURRENT_DATE - INTERVAL '1 month')`
-                  break
-                case "LAST_3_MONTHS":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '89 days' AND CURRENT_DATE`
-                  break
-                case "LAST_6_MONTHS":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 months' AND CURRENT_DATE`
-                  break
-                case "THIS_YEAR":
-                  clause = `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE) AND DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year' - INTERVAL '1 day'`
-                  break
-                case "LAST_YEAR":
-                  clause = `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE - INTERVAL '1 year') AND DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 day'`
-                  break
-                case "LAST_12_MONTHS":
-                  clause = `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '12 months' AND CURRENT_DATE`
-                  break
-                default:
-                  // Fall back to using the dynamically calculated dates if available
-                  if (filter.value && filter.value2) {
-                    clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
-                  }
-              }
-            } else {
-              // Regular operators
-              switch (filter.operator) {
-                case "=":
-                case "!=":
-                case ">":
-                case ">=":
-                case "<":
-                case "<=":
-                  clause = `${filter.column} ${filter.operator} '${filter.value}'`
-                  break
-                case "BETWEEN":
-                  clause = `${filter.column} BETWEEN '${filter.value}' AND '${filter.value2}'`
-                  break
-                case "NOT_BETWEEN":
-                  clause = `${filter.column} NOT BETWEEN '${filter.value}' AND '${filter.value2}'`
-                  break
-                case "IN":
-                  const inValues = filter.value
-                    .split(",")
-                    .map((v: string) => `'${v.trim()}'`)
-                    .join(",")
-                  clause = `${filter.column} IN (${inValues})`
-                  break
-                case "NOT_IN":
-                  const notInValues = filter.value
-                    .split(",")
-                    .map((v: string) => `'${v.trim()}'`)
-                    .join(",")
-                  clause = `${filter.column} NOT IN (${notInValues})`
-                  break
-                case "LIKE":
-                  clause = `${filter.column} LIKE '%${filter.value}%'`
-                  break
-                case "NOT LIKE":
-                  clause = `${filter.column} NOT LIKE '%${filter.value}%'`
-                  break
-                case "STARTS_WITH":
-                  clause = `${filter.column} LIKE '${filter.value}%'`
-                  break
-                case "NOT_STARTS_WITH":
-                  clause = `${filter.column} NOT LIKE '${filter.value}%'`
-                  break
-                case "ENDS_WITH":
-                  clause = `${filter.column} LIKE '%${filter.value}'`
-                  break
-                case "NOT_ENDS_WITH":
-                  clause = `${filter.column} NOT LIKE '%${filter.value}'`
-                  break
-                case "IS NULL":
-                  clause = `${filter.column} IS NULL`
-                  break
-                case "IS NOT NULL":
-                  clause = `${filter.column} IS NOT NULL`
-                  break
-              }
-            }
-            
-            return clause
-          })
-          .filter(Boolean)
-
-        if (filterClauses.length === 0) return ""
-        
-        // For NOT condition groups, we join the filters with AND and then negate the entire group
-        // This is the correct logical implementation: NOT(A AND B AND C)
-        // For other conditions (AND, OR), we join the filters with the specified condition
-        if (group.condition === "NOT") {
-          return `NOT (${filterClauses.join(" AND ")})`
-        }
-        return `(${filterClauses.join(` ${group.condition} `)})`
-      })
-      .filter(Boolean)
-
-    if (groupClauses.length > 0) {
-      // Use between-group conditions if available, otherwise default to AND
-      if (groupClauses.length > 1 && betweenGroupConditions.length > 0) {
-        let finalClause = groupClauses[0]
-        
-        for (let i = 1; i < groupClauses.length; i++) {
-          const condition = i - 1 < betweenGroupConditions.length 
-            ? betweenGroupConditions[i - 1] 
-            : "AND"
-          finalClause += ` ${condition} ${groupClauses[i]}`
-        }
-        
-        whereClause = ` WHERE ${finalClause}`
-      } else {
-        whereClause = ` WHERE ${groupClauses.join(" AND ")}`
+    let sql = `SELECT * FROM ${tableName} WHERE `;
+    
+    // Process each filter group
+    const groupClauses = enabledGroups.map((group, groupIndex) => {
+      if (!group.filters || group.filters.length === 0) {
+        return null;
       }
+      
+      // Process filters within this group
+      const filterClauses = group.filters.map(filter => {
+        if (!filter.column) return null;
+        
+        // Check if this is a date preset filter
+        const isDatePresetOperator = [
+          "LAST_1_DAY",
+          "LAST_7_DAYS", 
+          "LAST_30_DAYS", 
+          "LAST_3_MONTHS", 
+          "LAST_6_MONTHS", 
+          "LAST_12_MONTHS",
+          "THIS_MONTH",
+          "LAST_MONTH",
+          "THIS_YEAR",
+          "LAST_YEAR"
+        ].includes(filter.operator);
+        
+        if (isDatePresetOperator) {
+          // Generate SQL for date preset
+          switch(filter.operator) {
+            case "LAST_1_DAY":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '1 day' AND CURRENT_DATE`;
+            case "LAST_7_DAYS":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 days' AND CURRENT_DATE`;
+            case "LAST_30_DAYS":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '29 days' AND CURRENT_DATE`;
+            case "LAST_3_MONTHS":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '89 days' AND CURRENT_DATE`;
+            case "LAST_6_MONTHS":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '6 months' AND CURRENT_DATE`;
+            case "LAST_12_MONTHS":
+              return `${filter.column} BETWEEN CURRENT_DATE - INTERVAL '12 months' AND CURRENT_DATE`;
+            case "LAST_YEAR":
+              return `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE - INTERVAL '1 year') AND DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 day'`;
+            case "THIS_MONTH":
+              return `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE) AND LAST_DAY(CURRENT_DATE)`;
+            case "LAST_MONTH":
+              return `${filter.column} BETWEEN DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND LAST_DAY(CURRENT_DATE - INTERVAL '1 month')`;
+            case "THIS_YEAR":
+              return `${filter.column} BETWEEN DATE_TRUNC('year', CURRENT_DATE) AND DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year' - INTERVAL '1 day'`;
+            default:
+              return null;
+          }
+        }
+        
+        // Regular operators
+        switch (filter.operator) {
+          case "=":
+          case "!=":
+          case ">":
+          case ">=":
+          case "<":
+          case "<=":
+            return `${filter.column} ${filter.operator} '${filter.value}'`;
+          case "BETWEEN":
+          case "NOT_BETWEEN":
+            return `${filter.column} ${filter.operator.replace('_', ' ')} '${filter.value}' AND '${filter.value2}'`;
+          case "IN":
+          case "NOT_IN":
+            if (typeof filter.value === 'string') {
+              return `${filter.column} ${filter.operator.replace('_', ' ')} (${filter.value.split(',').map((v: string) => `'${v.trim()}'`).join(',')})`;
+            } else if (Array.isArray(filter.value)) {
+              return `${filter.column} ${filter.operator.replace('_', ' ')} (${filter.value.map((v: string) => `'${v}'`).join(',')})`;
+            }
+            return null;
+          case "LIKE":
+          case "NOT LIKE":
+            return `${filter.column} ${filter.operator} '%${filter.value}%'`;
+          case "STARTS_WITH":
+          case "NOT_STARTS_WITH":
+            return `${filter.column} ${filter.operator.replace('STARTS_WITH', 'LIKE').replace('NOT_STARTS_WITH', 'NOT LIKE')} '${filter.value}%'`;
+          case "ENDS_WITH":
+          case "NOT_ENDS_WITH":
+            return `${filter.column} ${filter.operator.replace('ENDS_WITH', 'LIKE').replace('NOT_ENDS_WITH', 'NOT LIKE')} '%${filter.value}'`;
+          case "IS NULL":
+          case "IS NOT NULL":
+            return `${filter.column} ${filter.operator}`;
+          default:
+            return null;
+        }
+      }).filter(Boolean);
+      
+      if (filterClauses.length === 0) return null;
+      
+      // Join filter clauses with appropriate condition
+      if (group.condition === "NOT") {
+        return `NOT (${filterClauses.join(' AND ')})`;
+      } else {
+        return `(${filterClauses.join(` ${group.condition} `)})`;
+      }
+    }).filter(Boolean);
+    
+    if (groupClauses.length === 0) {
+      return `SELECT * FROM ${tableName}`;
     }
-
-    return `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`
+    
+    // Join group clauses with appropriate conditions
+    if (groupClauses.length > 1 && betweenGroupConditions.length > 0) {
+      let finalClause = groupClauses[0];
+      
+      for (let i = 1; i < groupClauses.length; i++) {
+        const condition = i - 1 < betweenGroupConditions.length 
+          ? betweenGroupConditions[i - 1] 
+          : "AND";
+        finalClause += ` ${condition} ${groupClauses[i]}`;
+      }
+      
+      return `${sql}${finalClause}`;
+    } else {
+      return `${sql}${groupClauses.join(" AND ")}`;
+    }
   }
 
   // Function to ensure SQL has balanced parentheses and proper syntax
@@ -1310,10 +1393,20 @@ export default function TableDetailPage() {
       fixedSql += ')'.repeat(openParens - closeParens);
     }
     
-    // Ensure SQL ends with LIMIT clause
-    if (!fixedSql.toLowerCase().includes('limit')) {
-      fixedSql += ' LIMIT 1000';
-    }
+    // Remove automatic LIMIT addition - pagination will be handled by the backend
+    
+    // Fix date functions with unquoted string parameters
+    // DATE_TRUNC('param', column) - ensure 'param' is properly quoted
+    fixedSql = fixedSql.replace(/DATE_TRUNC\s*\(\s*([^',\s]+)\s*,/gi, (match, param) => {
+      // Skip if param is already quoted or is a column reference
+      if (param.startsWith("'") || param.startsWith('"') || param.includes('.')) {
+        return match;
+      }
+      return `DATE_TRUNC('${param}',`;
+    });
+    
+    // LAST_DAY(column) - no parameters to quote, but ensure it's properly formatted
+    fixedSql = fixedSql.replace(/LAST_DAY\s*\(/gi, 'LAST_DAY(');
     
     // Fix common syntax errors
     // Ensure string values are properly quoted
@@ -1360,6 +1453,11 @@ export default function TableDetailPage() {
         }
         
         setGeneratedSql(validatedCustomSql);
+        
+        // Debug logging to see if HTML entities are being introduced
+        console.log("Original custom SQL:", validatedCustomSql);
+        console.log("Does SQL contain > characters?", validatedCustomSql.includes(">"));
+        console.log("Does SQL contain < characters?", validatedCustomSql.includes("<"));
         
         // Execute query with custom SQL
         // The backend will handle parsing the SQL
@@ -1531,10 +1629,11 @@ export default function TableDetailPage() {
   };
 
   const resetSqlEditor = () => {
-    const generatedSql = generateSqlFromFilters();
-    setCustomSql(generatedSql);
-    setGeneratedSql(generatedSql);
+    const freshGeneratedSql = generateSqlFromFilters();
+    setCustomSql(freshGeneratedSql);
+    setGeneratedSql(freshGeneratedSql);
     
+    // Make sure to update both states to ensure they're in sync
     toast({
       title: "SQL Reset",
       description: "SQL reset to filter-generated query with dynamic date expressions",
@@ -1766,6 +1865,16 @@ export default function TableDetailPage() {
       toast({
         title: "Error",
         description: "Please select an end date in Execution Timing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate that end date is not earlier than start date
+    if (new Date(segmentData.endDate) < new Date(segmentData.startDate)) {
+      toast({
+        title: "Error",
+        description: "End date cannot be earlier than start date",
         variant: "destructive",
       });
       return;
@@ -2257,9 +2366,13 @@ export default function TableDetailPage() {
                   <Button variant="outline" size="sm" className="h-8 text-sm border-violet-400/30 hover:border-violet-400/40 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300" onClick={() => setShowSqlEditor(!showSqlEditor)}>
                     <Code className="h-3.5 w-3.5 mr-1.5 text-violet-600" />
                     {showSqlEditor ? "Hide" : "Show"} SQL Editor
+                    {/* Add red dot indicator when custom SQL is active */}
+                    {customSql && (customSql !== generatedSql || customSql !== generateSqlFromFilters()) && (
+                      <span className="ml-1.5 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Toggle SQL editor view</TooltipContent>
+                <TooltipContent>Toggle SQL editor view{customSql && (customSql !== generatedSql || customSql !== generateSqlFromFilters()) ? " (Custom SQL active)" : ""}</TooltipContent>
               </Tooltip>
 
               <Tooltip>
@@ -2395,7 +2508,17 @@ export default function TableDetailPage() {
                           </Label>
                           <DatePicker 
                             date={segmentData.startDate} 
-                            setDate={(date) => setSegmentData({ ...segmentData, startDate: date })}
+                            setDate={(date) => {
+                              setSegmentData({ ...segmentData, startDate: date });
+                              // If end date is before start date, update end date to start date
+                              if (segmentData.endDate && date > segmentData.endDate) {
+                                setSegmentData(prev => ({ ...prev, endDate: date }));
+                                toast({
+                                  title: "Date adjusted",
+                                  description: "End date was set to match start date as it was earlier",
+                                });
+                              }
+                            }}
                             isRequired={true}
                           />
                         </div>
@@ -2407,6 +2530,7 @@ export default function TableDetailPage() {
                             date={segmentData.endDate} 
                             setDate={(date) => setSegmentData({ ...segmentData, endDate: date })}
                             isRequired={true}
+                            minDate={segmentData.startDate} // Prevent selecting dates before start date
                           />
                         </div>
                       </div>
@@ -2489,9 +2613,21 @@ export default function TableDetailPage() {
                     
                     <SqlEditor
                       sql={customSql || generateSqlFromFilters()}
-                      onChange={setCustomSql}
+                      onChange={(newSql) => {
+                        // Only update if the SQL has actually changed
+                        if (newSql !== customSql) {
+                          setCustomSql(newSql);
+                        }
+                      }}
                       onExecute={executeQuery}
                       onReset={resetSqlEditor}
+                      isCustomActive={customSql !== '' && (customSql !== generatedSql || customSql !== generateSqlFromFilters())}
+                      setIsCustomActive={(active) => {
+                        // If custom mode is being turned off, reset to generated SQL
+                        if (!active) {
+                          resetSqlEditor();
+                        }
+                      }}
                     />
                   </div>
                 )}

@@ -18,8 +18,8 @@ interface SqlEditorProps {
 }
 
 export function SqlEditor({ sql, onChange, onExecute, onReset, isCustomActive, setIsCustomActive }: SqlEditorProps) {
-  const [isCustom, setIsCustom] = useState(isCustomActive || false)
   const [originalSql, setOriginalSql] = useState(sql)
+  const [isCustom, setIsCustom] = useState(isCustomActive !== undefined ? isCustomActive : (sql !== originalSql))
   const { toast } = useToast()
 
   // Update local isCustom state when prop changes
@@ -32,9 +32,31 @@ export function SqlEditor({ sql, onChange, onExecute, onReset, isCustomActive, s
   // Update original SQL when the prop changes and we're not in custom mode
   useEffect(() => {
     if (!isCustom) {
+      // When not in custom mode, always update the displayed SQL when it changes
+      // This ensures filter changes are immediately reflected
       setOriginalSql(sql)
+    } else {
+      // If we're in custom mode, check if the SQL equals the original to potentially turn off custom mode
+      if (sql === originalSql) {
+        setIsCustom(false)
+        if (setIsCustomActive) {
+          setIsCustomActive(false)
+        }
+      }
     }
-  }, [sql, isCustom])
+  }, [sql, isCustom, originalSql, setIsCustomActive])
+  
+  // Additional effect to detect custom SQL changes
+  useEffect(() => {
+    // When SQL is modified compared to original, make sure custom mode is on
+    const isCurrentlyCustom = sql !== originalSql;
+    if (isCurrentlyCustom !== isCustom) {
+      setIsCustom(isCurrentlyCustom);
+      if (setIsCustomActive) {
+        setIsCustomActive(isCurrentlyCustom);
+      }
+    }
+  }, [sql, originalSql, isCustom, setIsCustomActive]);
 
   const handleSqlChange = (newSql: string) => {
     onChange(newSql)
@@ -48,8 +70,10 @@ export function SqlEditor({ sql, onChange, onExecute, onReset, isCustomActive, s
 
   const resetToGenerated = () => {
     if (onReset) {
+      // Use the parent's reset function to ensure proper state sync
       onReset()
     } else {
+      // Fallback to local reset
       onChange(originalSql)
     }
     
@@ -64,6 +88,13 @@ export function SqlEditor({ sql, onChange, onExecute, onReset, isCustomActive, s
       description: "Reverted to auto-generated SQL from filters",
     })
   }
+
+  // Watch for SQL changes from props and update textarea if not in custom mode
+  useEffect(() => {
+    if (!isCustom && sql !== originalSql) {
+      setOriginalSql(sql)
+    }
+  }, [sql, isCustom])
 
   const copySql = async () => {
     try {

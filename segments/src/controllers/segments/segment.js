@@ -9,6 +9,77 @@ const escapeSQLString = (str) => {
   return `'${str.toString().replace(/'/g, "''")}'`;
 };
 
+// Updated helper function specific for escaping SQL content to be stored as a string in Databricks SQL
+const escapeSqlContentForLiteral = (sqlString) => {
+  if (sqlString === null || sqlString === undefined) return 'NULL';
+  
+  // For Databricks SQL, we need to use backslashes to escape special characters
+  // First, escape any backslashes with double backslashes
+  let escapedString = sqlString.toString().replace(/\\/g, '\\\\');
+  
+  // Then escape single quotes with a backslash
+  escapedString = escapedString.replace(/'/g, "\\'");
+  
+  // Enclose the entire escaped string in single quotes for the INSERT statement
+  return `'${escapedString}'`;
+};
+
+/**
+ * Decode HTML entities in a string
+ * @param {string} str - String that may contain HTML entities
+ * @returns {string} String with decoded HTML entities
+ */
+const decodeHtmlEntities = (str) => {
+  if (!str || typeof str !== 'string') return str;
+  
+  // Create a map of common HTML entities to their corresponding characters
+  const entityMap = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&apos;': "'",
+    '&#x2F;': '/',
+    '&#47;': '/',
+    '&#x60;': '`',
+    '&#96;': '`',
+    '&#x3D;': '=',
+    '&#61;': '='
+  };
+  
+  // First, replace the mapped entities
+  let decoded = str.replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&apos;|&#x2F;|&#47;|&#x60;|&#96;|&#x3D;|&#61;/g, 
+    (match) => entityMap[match]);
+  
+  // Then handle any numeric entities like &#123;
+  decoded = decoded.replace(/&#(\d+);/g, (match, numStr) => {
+    const num = parseInt(numStr, 10);
+    return String.fromCharCode(num);
+  });
+  
+  // Finally handle hexadecimal entities like &#x1F;
+  decoded = decoded.replace(/&#x([0-9a-f]+);/gi, (match, numStr) => {
+    const num = parseInt(numStr, 16);
+    return String.fromCharCode(num);
+  });
+  
+  return decoded;
+};
+
+// Helper function to unescape SQL content retrieved from the database
+const unescapeSqlContent = (escapedSql) => {
+  if (!escapedSql || typeof escapedSql !== 'string') return escapedSql;
+  
+  // First, replace escaped single quotes with actual single quotes
+  let unescapedSql = escapedSql.replace(/\\'/g, "'");
+  
+  // Then, replace double backslashes with single backslashes
+  unescapedSql = unescapedSql.replace(/\\\\/g, '\\');
+  
+  return unescapedSql;
+};
+
 // Helper function to validate segment data
 const validateSegmentData = (data) => {
   if (!data.segment_name || typeof data.segment_name !== 'string') {
@@ -20,6 +91,45 @@ const validateSegmentData = (data) => {
   if (!data.segment_config || typeof data.segment_config !== 'object') {
     throw new Error('Invalid segment configuration');
   }
+};
+
+// Helper function to ensure date functions have properly quoted parameters
+const ensureDateFunctionQuotes = (sql) => {
+  if (!sql) return sql;
+  
+  let fixedSql = sql;
+  
+  // Fix DATE_TRUNC function to ensure parameters are quoted
+  fixedSql = fixedSql.replace(/DATE_TRUNC\s*\(\s*([^',\s]+)\s*,/gi, (match, param) => {
+    // Skip if param is already quoted or is a column reference
+    if (param.startsWith("'") || param.startsWith('"') || param.includes('.')) {
+      return match;
+    }
+    return `DATE_TRUNC('${param}',`;
+  });
+  
+  // Fix DATEADD function to ensure parameters are quoted
+  fixedSql = fixedSql.replace(/DATEADD\s*\(\s*([^',\s]+)\s*,/gi, (match, param) => {
+    // Skip if param is already quoted or is a column reference
+    if (param.startsWith("'") || param.startsWith('"') || param.includes('.')) {
+      return match;
+    }
+    return `DATEADD('${param}',`;
+  });
+  
+  // Fix EXTRACT function to ensure parameters are quoted
+  fixedSql = fixedSql.replace(/EXTRACT\s*\(\s*([^',\s]+)\s*FROM/gi, (match, param) => {
+    // Skip if param is already quoted or is a column reference
+    if (param.startsWith("'") || param.startsWith('"') || param.includes('.')) {
+      return match;
+    }
+    return `EXTRACT('${param}' FROM`;
+  });
+  
+  // LAST_DAY(column) - no parameters to quote, but ensure it's properly formatted
+  fixedSql = fixedSql.replace(/LAST_DAY\s*\(/gi, 'LAST_DAY(');
+  
+  return fixedSql;
 };
 
 // Get all segments - simple endpoint that returns all segments
@@ -36,6 +146,15 @@ exports.getAllSegments = async (req, res) => {
     // Parse JSON strings back to objects
     const segments = results.map(segment => {
       try {
+        // Unescape SQL content if present
+        if (segment.generated_sql) {
+          segment.generated_sql = unescapeSqlContent(segment.generated_sql);
+        }
+        
+        if (segment.custom_sql) {
+          segment.custom_sql = unescapeSqlContent(segment.custom_sql);
+        }
+        
         return {
           ...segment,
           segment_config: segment.segment_config ? JSON.parse(segment.segment_config) : {}
@@ -100,11 +219,36 @@ exports.createSegment = async (req, res) => {
   try {
     const segmentData = req.body;
 
+    console.log("segmentData is ", segmentData);
+
     // Validate input data
     validateSegmentData(segmentData);
 
     const segmentId = uuidv4();
     const segmentConfig = JSON.stringify(segmentData.segment_config);
+
+    // Decode HTML entities in custom_sql and generated_sql if they exist
+    if (segmentData.custom_sql) {
+      console.log("Original Custom SQL:", segmentData.custom_sql);
+      console.log("Contains > character:", segmentData.custom_sql.includes('>'));
+      console.log("Contains &gt; entity:", segmentData.custom_sql.includes('&gt;'));
+      
+      segmentData.custom_sql = decodeHtmlEntities(segmentData.custom_sql);
+      console.log("Decoded Custom SQL:", segmentData.custom_sql);
+      console.log("After decoding - Contains > character:", segmentData.custom_sql.includes('>'));
+      console.log("After decoding - Contains &gt; entity:", segmentData.custom_sql.includes('&gt;'));
+    }
+    
+    if (segmentData.generated_sql) {
+      console.log("Original Generated SQL:", segmentData.generated_sql);
+      console.log("Contains > character:", segmentData.generated_sql.includes('>'));
+      console.log("Contains &gt; entity:", segmentData.generated_sql.includes('&gt;'));
+      
+      segmentData.generated_sql = decodeHtmlEntities(segmentData.generated_sql);
+      console.log("Decoded Generated SQL:", segmentData.generated_sql);
+      console.log("After decoding - Contains > character:", segmentData.generated_sql.includes('>'));
+      console.log("After decoding - Contains &gt; entity:", segmentData.generated_sql.includes('&gt;'));
+    }
 
     // Process filter groups to generate dynamic SQL expressions for date presets
     if (segmentData.filter_groups && Array.isArray(segmentData.filter_groups)) {
@@ -146,50 +290,59 @@ exports.createSegment = async (req, res) => {
       });
       
       // Update custom SQL with dynamic date expressions if it exists
-      if (segmentData.custom_sql && datePresetFilters.length > 0) {
-        let updatedSql = segmentData.custom_sql;
+      // if (segmentData.custom_sql && datePresetFilters.length > 0) {
+      //   let updatedSql = segmentData.custom_sql;
+
+      //   console.log("custom sql is ", segmentData.custom_sql);
         
-        datePresetFilters.forEach(datePresetFilter => {
-          const columnName = datePresetFilter.column;
-          const sqlExpression = datePresetFilter.sqlExpression;
+      //   datePresetFilters.forEach(datePresetFilter => {
+      //     const columnName = datePresetFilter.column;
+      //     const sqlExpression = datePresetFilter.sqlExpression;
           
-          // Pattern for: column BETWEEN 'date1' AND 'date2'
-          const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
+      //     // Pattern for: column BETWEEN 'date1' AND 'date2'
+      //     const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
           
-          if (pattern.test(updatedSql)) {
-            // Reset the pattern's lastIndex
-            pattern.lastIndex = 0;
-            // Replace the matched pattern with the SQL interval expression
-            updatedSql = updatedSql.replace(pattern, sqlExpression);
-          }
-        });
+      //     if (pattern.test(updatedSql)) {
+      //       // Reset the pattern's lastIndex
+      //       pattern.lastIndex = 0;
+      //       // Replace the matched pattern with the SQL interval expression
+      //       updatedSql = updatedSql.replace(pattern, sqlExpression);
+      //     }
+      //   });
         
-        // Update the custom_sql with the dynamic expressions
-        segmentData.custom_sql = updatedSql;
-      }
+      //   // Ensure date functions have properly quoted parameters
+      //   updatedSql = ensureDateFunctionQuotes(updatedSql);
+        
+      //   console.log("updatedSql custom sql is ", updatedSql);
+      //   // Update the custom_sql with the dynamic expressions
+      //   segmentData.custom_sql = updatedSql;
+      // }
       
-      // Update generated_sql with dynamic date expressions if it exists
-      if (segmentData.generated_sql && datePresetFilters.length > 0) {
-        let updatedSql = segmentData.generated_sql;
+      // // Update generated_sql with dynamic date expressions if it exists
+      // if (segmentData.generated_sql && datePresetFilters.length > 0) {
+      //   let updatedSql = segmentData.generated_sql;
         
-        datePresetFilters.forEach(datePresetFilter => {
-          const columnName = datePresetFilter.column;
-          const sqlExpression = datePresetFilter.sqlExpression;
+      //   datePresetFilters.forEach(datePresetFilter => {
+      //     const columnName = datePresetFilter.column;
+      //     const sqlExpression = datePresetFilter.sqlExpression;
           
-          // Pattern for: column BETWEEN 'date1' AND 'date2'
-          const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
+      //     // Pattern for: column BETWEEN 'date1' AND 'date2'
+      //     const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
           
-          if (pattern.test(updatedSql)) {
-            // Reset the pattern's lastIndex
-            pattern.lastIndex = 0;
-            // Replace the matched pattern with the SQL interval expression
-            updatedSql = updatedSql.replace(pattern, sqlExpression);
-          }
-        });
+      //     if (pattern.test(updatedSql)) {
+      //       // Reset the pattern's lastIndex
+      //       pattern.lastIndex = 0;
+      //       // Replace the matched pattern with the SQL interval expression
+      //       updatedSql = updatedSql.replace(pattern, sqlExpression);
+      //     }
+      //   });
         
-        // Update the generated_sql with the dynamic expressions
-        segmentData.generated_sql = updatedSql;
-      }
+      //   // Ensure date functions have properly quoted parameters
+      //   updatedSql = ensureDateFunctionQuotes(updatedSql);
+        
+      //   // Update the generated_sql with the dynamic expressions
+      //   segmentData.generated_sql = updatedSql;
+      // }
       
       // If no custom_sql but we have filter groups, generate a new SQL with dynamic expressions
       if (!segmentData.custom_sql && !segmentData.generated_sql && datePresetFilters.length > 0) {
@@ -348,7 +501,7 @@ exports.createSegment = async (req, res) => {
         const tableName = segmentData.segment_config?.target_table || segmentData.table_id;
         
         // Generate the complete SQL with dynamic expressions
-        segmentData.generated_sql = `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`;
+        segmentData.generated_sql = `SELECT * FROM ${tableName}${whereClause}`;
         console.log("Generated SQL with dynamic expressions:", segmentData.generated_sql);
       }
     }
@@ -379,14 +532,19 @@ exports.createSegment = async (req, res) => {
         ${segmentData.end_time ? escapeSQLString(segmentData.end_time) : 'NULL'},
         ${segmentData.status ? escapeSQLString(segmentData.status) : "'pending'"},
         ${escapeSQLString(segmentConfig)},
-        ${segmentData.generated_sql ? escapeSQLString(segmentData.generated_sql) : 'NULL'},
-        ${segmentData.custom_sql ? escapeSQLString(segmentData.custom_sql) : 'NULL'},
+        ${segmentData.generated_sql ? escapeSqlContentForLiteral(segmentData.generated_sql) : 'NULL'},
+        ${segmentData.custom_sql ? escapeSqlContentForLiteral(segmentData.custom_sql) : 'NULL'},
         ${segmentData.is_template || false},
         ${segmentData.is_saved_table || false}
       )
     `;
 
-    await executeAppSchemaQuery(query);
+    console.log("custom sql without escape is ", segmentData.custom_sql);
+    console.log("custom sql is ", escapeSQLString(segmentData.custom_sql) );
+
+   const result = await executeAppSchemaQuery(query);
+   console.log("result is ", result);
+   console.log("saved segment is ", result[0]);
 
     // Process filter groups and filters if they exist
     if (segmentData.filter_groups && Array.isArray(segmentData.filter_groups) && segmentData.filter_groups.length > 0) {
@@ -553,6 +711,39 @@ exports.getSegmentById = async (req, res) => {
     }
 
     const segment = segmentResult[0];
+
+    console.log("segment is ", segment);
+    
+    // Unescape SQL content if present
+    if (segment.generated_sql) {
+      segment.generated_sql = unescapeSqlContent(segment.generated_sql);
+      
+      // Check for HTML entities that might have been stored in the database
+      if (segment.generated_sql.includes('&gt;') || segment.generated_sql.includes('&lt;')) {
+        console.log("Warning: HTML entities found in generated SQL after unescaping:", 
+          segment.generated_sql.includes('&gt;') ? '&gt; found' : '', 
+          segment.generated_sql.includes('&lt;') ? '&lt; found' : '');
+        
+        // Decode any HTML entities that might have been stored
+        segment.generated_sql = decodeHtmlEntities(segment.generated_sql);
+        console.log("Decoded generated SQL:", segment.generated_sql);
+      }
+    }
+    
+    if (segment.custom_sql) {
+      segment.custom_sql = unescapeSqlContent(segment.custom_sql);
+      
+      // Check for HTML entities that might have been stored in the database
+      if (segment.custom_sql.includes('&gt;') || segment.custom_sql.includes('&lt;')) {
+        console.log("Warning: HTML entities found in custom SQL after unescaping:", 
+          segment.custom_sql.includes('&gt;') ? '&gt; found' : '', 
+          segment.custom_sql.includes('&lt;') ? '&lt; found' : '');
+        
+        // Decode any HTML entities that might have been stored
+        segment.custom_sql = decodeHtmlEntities(segment.custom_sql);
+        console.log("Decoded custom SQL:", segment.custom_sql);
+      }
+    }
     
     // Parse segment_config if it's a string
     if (typeof segment.segment_config === 'string') {
@@ -749,216 +940,216 @@ exports.getSegmentById = async (req, res) => {
     }
 
     // Update generated_sql with dynamic dates if needed
-    if (segment.generated_sql && (dateReplacements.length > 0 || datePresetSqlExpressions.length > 0)) {
-      console.log("Updating generated_sql with dynamic dates");
+    // if (segment.generated_sql && (dateReplacements.length > 0 || datePresetSqlExpressions.length > 0)) {
+    //   console.log("Updating generated_sql with dynamic dates");
       
-      // Store original SQL before making any changes
-      segment.original_generated_sql = segment.generated_sql;
+    //   // Store original SQL before making any changes
+    //   segment.original_generated_sql = segment.generated_sql;
       
-      // Instead of just replacing values in the existing SQL, let's regenerate it completely
-      // based on the filter groups with their updated dynamic dates
-      // This approach is similar to the frontend's generateSqlFromFilters function
+    //   // Instead of just replacing values in the existing SQL, let's regenerate it completely
+    //   // based on the filter groups with their updated dynamic dates
+    //   // This approach is similar to the frontend's generateSqlFromFilters function
       
-      try {
-        // Generate SQL from filter groups
-        let whereClause = "";
-        const enabledGroups = enhancedFilterGroups.filter(group => true); // All groups are enabled in backend
+    //   try {
+    //     // Generate SQL from filter groups
+    //     let whereClause = "";
+    //     const enabledGroups = enhancedFilterGroups.filter(group => true); // All groups are enabled in backend
         
-        const groupClauses = enabledGroups.map(group => {
-          if (!group.filters || group.filters.length === 0) return "";
+    //     const groupClauses = enabledGroups.map(group => {
+    //       if (!group.filters || group.filters.length === 0) return "";
           
-          const filterClauses = group.filters.map(filter => {
-            let clause = "";
+    //       const filterClauses = group.filters.map(filter => {
+    //         let clause = "";
             
-            // Check if this is a date filter with a preset
-            const hasDatePreset = !!filter.date_preset;
-            const isDateType = 
-              (filter.column_data_type || '').toLowerCase() === 'date' || 
-              (filter.column_data_type || '').toLowerCase() === 'datetime' || 
-              (filter.column_data_type || '').toLowerCase() === 'timestamp';
+    //         // Check if this is a date filter with a preset
+    //         const hasDatePreset = !!filter.date_preset;
+    //         const isDateType = 
+    //           (filter.column_data_type || '').toLowerCase() === 'date' || 
+    //           (filter.column_data_type || '').toLowerCase() === 'datetime' || 
+    //           (filter.column_data_type || '').toLowerCase() === 'timestamp';
             
-            if (hasDatePreset && isDateType) {
-              // Use SQL interval expression if available
-              const datePresetSql = datePresetSqlExpressions.find(
-                dps => dps.column === filter.column_name && dps.preset === filter.normalized_preset
-              );
+    //         if (hasDatePreset && isDateType) {
+    //           // Use SQL interval expression if available
+    //           const datePresetSql = datePresetSqlExpressions.find(
+    //             dps => dps.column === filter.column_name && dps.preset === filter.normalized_preset
+    //           );
               
-              if (datePresetSql) {
-                // Use the SQL interval expression
-                clause = datePresetSql.sqlExpression;
-              } else {
-                // Fall back to using the dynamically calculated dates
-                clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
-              }
-            } else {
-              // Handle regular operators
-              switch (filter.filter_operator) {
-                case 'equals':
-                  clause = `${filter.column_name} = '${filter.filter_value}'`;
-                  break;
-                case 'notEquals':
-                  clause = `${filter.column_name} <> '${filter.filter_value}'`;
-                  break;
-                case 'contains':
-                  clause = `${filter.column_name} LIKE '%${filter.filter_value}%'`;
-                  break;
-                case 'notContains':
-                  clause = `${filter.column_name} NOT LIKE '%${filter.filter_value}%'`;
-                  break;
-                case 'startsWith':
-                  clause = `${filter.column_name} LIKE '${filter.filter_value}%'`;
-                  break;
-                case 'notStartsWith':
-                  clause = `${filter.column_name} NOT LIKE '${filter.filter_value}%'`;
-                  break;
-                case 'endsWith':
-                  clause = `${filter.column_name} LIKE '%${filter.filter_value}'`;
-                  break;
-                case 'notEndsWith':
-                  clause = `${filter.column_name} NOT LIKE '%${filter.filter_value}'`;
-                  break;
-                case 'greaterThan':
-                  clause = `${filter.column_name} > '${filter.filter_value}'`;
-                  break;
-                case 'greaterThanOrEqual':
-                  clause = `${filter.column_name} >= '${filter.filter_value}'`;
-                  break;
-                case 'lessThan':
-                  clause = `${filter.column_name} < '${filter.filter_value}'`;
-                  break;
-                case 'lessThanOrEqual':
-                  clause = `${filter.column_name} <= '${filter.filter_value}'`;
-                  break;
-                case 'in':
-                  if (Array.isArray(filter.filter_value)) {
-                    const inValues = filter.filter_value.map(v => `'${v}'`).join(", ");
-                    clause = `${filter.column_name} IN (${inValues})`;
-                  } else {
-                    const inValues = filter.filter_value.split(',').map(v => `'${v.trim()}'`).join(", ");
-                    clause = `${filter.column_name} IN (${inValues})`;
-                  }
-                  break;
-                case 'notIn':
-                  if (Array.isArray(filter.filter_value)) {
-                    const notInValues = filter.filter_value.map(v => `'${v}'`).join(", ");
-                    clause = `${filter.column_name} NOT IN (${notInValues})`;
-                  } else {
-                    const notInValues = filter.filter_value.split(',').map(v => `'${v.trim()}'`).join(", ");
-                    clause = `${filter.column_name} NOT IN (${notInValues})`;
-                  }
-                  break;
-                case 'between':
-                  if (Array.isArray(filter.filter_value) && filter.filter_value.length >= 2) {
-                    clause = `${filter.column_name} BETWEEN '${filter.filter_value[0]}' AND '${filter.filter_value[1]}'`;
-                  } else if (filter.filter_value && filter.filter_value_2) {
-                    clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
-                  }
-                  break;
-                case 'notBetween':
-                  if (Array.isArray(filter.filter_value) && filter.filter_value.length >= 2) {
-                    clause = `${filter.column_name} NOT BETWEEN '${filter.filter_value[0]}' AND '${filter.filter_value[1]}'`;
-                  } else if (filter.filter_value && filter.filter_value_2) {
-                    clause = `${filter.column_name} NOT BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
-                  }
-                  break;
-                case 'isNull':
-                  clause = `${filter.column_name} IS NULL`;
-                  break;
-                case 'isNotNull':
-                  clause = `${filter.column_name} IS NOT NULL`;
-                  break;
-                default:
-                  // Handle any date preset operators that might have been passed directly
-                  if (filter.filter_value && filter.filter_value_2) {
-                    clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
-                  }
-              }
-            }
+    //           if (datePresetSql) {
+    //             // Use the SQL interval expression
+    //             clause = datePresetSql.sqlExpression;
+    //           } else {
+    //             // Fall back to using the dynamically calculated dates
+    //             clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
+    //           }
+    //         } else {
+    //           // Handle regular operators
+    //           switch (filter.filter_operator) {
+    //             case 'equals':
+    //               clause = `${filter.column_name} = '${filter.filter_value}'`;
+    //               break;
+    //             case 'notEquals':
+    //               clause = `${filter.column_name} <> '${filter.filter_value}'`;
+    //               break;
+    //             case 'contains':
+    //               clause = `${filter.column_name} LIKE '%${filter.filter_value}%'`;
+    //               break;
+    //             case 'notContains':
+    //               clause = `${filter.column_name} NOT LIKE '%${filter.filter_value}%'`;
+    //               break;
+    //             case 'startsWith':
+    //               clause = `${filter.column_name} LIKE '${filter.filter_value}%'`;
+    //               break;
+    //             case 'notStartsWith':
+    //               clause = `${filter.column_name} NOT LIKE '${filter.filter_value}%'`;
+    //               break;
+    //             case 'endsWith':
+    //               clause = `${filter.column_name} LIKE '%${filter.filter_value}'`;
+    //               break;
+    //             case 'notEndsWith':
+    //               clause = `${filter.column_name} NOT LIKE '%${filter.filter_value}'`;
+    //               break;
+    //             case 'greaterThan':
+    //               clause = `${filter.column_name} > '${filter.filter_value}'`;
+    //               break;
+    //             case 'greaterThanOrEqual':
+    //               clause = `${filter.column_name} >= '${filter.filter_value}'`;
+    //               break;
+    //             case 'lessThan':
+    //               clause = `${filter.column_name} < '${filter.filter_value}'`;
+    //               break;
+    //             case 'lessThanOrEqual':
+    //               clause = `${filter.column_name} <= '${filter.filter_value}'`;
+    //               break;
+    //             case 'in':
+    //               if (Array.isArray(filter.filter_value)) {
+    //                 const inValues = filter.filter_value.map(v => `'${v}'`).join(", ");
+    //                 clause = `${filter.column_name} IN (${inValues})`;
+    //               } else {
+    //                 const inValues = filter.filter_value.split(',').map(v => `'${v.trim()}'`).join(", ");
+    //                 clause = `${filter.column_name} IN (${inValues})`;
+    //               }
+    //               break;
+    //             case 'notIn':
+    //               if (Array.isArray(filter.filter_value)) {
+    //                 const notInValues = filter.filter_value.map(v => `'${v}'`).join(", ");
+    //                 clause = `${filter.column_name} NOT IN (${notInValues})`;
+    //               } else {
+    //                 const notInValues = filter.filter_value.split(',').map(v => `'${v.trim()}'`).join(", ");
+    //                 clause = `${filter.column_name} NOT IN (${notInValues})`;
+    //               }
+    //               break;
+    //             case 'between':
+    //               if (Array.isArray(filter.filter_value) && filter.filter_value.length >= 2) {
+    //                 clause = `${filter.column_name} BETWEEN '${filter.filter_value[0]}' AND '${filter.filter_value[1]}'`;
+    //               } else if (filter.filter_value && filter.filter_value_2) {
+    //                 clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
+    //               }
+    //               break;
+    //             case 'notBetween':
+    //               if (Array.isArray(filter.filter_value) && filter.filter_value.length >= 2) {
+    //                 clause = `${filter.column_name} NOT BETWEEN '${filter.filter_value[0]}' AND '${filter.filter_value[1]}'`;
+    //               } else if (filter.filter_value && filter.filter_value_2) {
+    //                 clause = `${filter.column_name} NOT BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
+    //               }
+    //               break;
+    //             case 'isNull':
+    //               clause = `${filter.column_name} IS NULL`;
+    //               break;
+    //             case 'isNotNull':
+    //               clause = `${filter.column_name} IS NOT NULL`;
+    //               break;
+    //             default:
+    //               // Handle any date preset operators that might have been passed directly
+    //               if (filter.filter_value && filter.filter_value_2) {
+    //                 clause = `${filter.column_name} BETWEEN '${filter.filter_value}' AND '${filter.filter_value_2}'`;
+    //               }
+    //           }
+    //         }
             
-            return clause;
-          }).filter(Boolean); // Remove empty clauses
+    //         return clause;
+    //       }).filter(Boolean); // Remove empty clauses
           
-          if (filterClauses.length === 0) return "";
+    //       if (filterClauses.length === 0) return "";
           
-          // Handle NOT condition for the group
-          const groupCondition = group.group_condition || 'AND';
-          const isNotCondition = group.not === true;
+    //       // Handle NOT condition for the group
+    //       const groupCondition = group.group_condition || 'AND';
+    //       const isNotCondition = group.not === true;
           
-          if (isNotCondition) {
-            return `NOT (${filterClauses.join(" AND ")})`;
-          }
+    //       if (isNotCondition) {
+    //         return `NOT (${filterClauses.join(" AND ")})`;
+    //       }
           
-          return `(${filterClauses.join(` ${groupCondition} `)})`;
-        }).filter(Boolean); // Remove empty group clauses
+    //       return `(${filterClauses.join(` ${groupCondition} `)})`;
+    //     }).filter(Boolean); // Remove empty group clauses
         
-        if (groupClauses.length > 0) {
-          // Use between-group conditions if available
-          if (groupClauses.length > 1 && segment.groupConditions && segment.groupConditions.length > 0) {
-            let finalClause = groupClauses[0];
+    //     if (groupClauses.length > 0) {
+    //       // Use between-group conditions if available
+    //       if (groupClauses.length > 1 && segment.groupConditions && segment.groupConditions.length > 0) {
+    //         let finalClause = groupClauses[0];
             
-            for (let i = 1; i < groupClauses.length; i++) {
-              const condition = i - 1 < segment.groupConditions.length 
-                ? segment.groupConditions[i - 1] 
-                : "AND";
-              finalClause += ` ${condition} ${groupClauses[i]}`;
-            }
+    //         for (let i = 1; i < groupClauses.length; i++) {
+    //           const condition = i - 1 < segment.groupConditions.length 
+    //             ? segment.groupConditions[i - 1] 
+    //             : "AND";
+    //           finalClause += ` ${condition} ${groupClauses[i]}`;
+    //         }
             
-            whereClause = ` WHERE ${finalClause}`;
-          } else {
-            whereClause = ` WHERE ${groupClauses.join(" AND ")}`;
-          }
-        }
+    //         whereClause = ` WHERE ${finalClause}`;
+    //       } else {
+    //         whereClause = ` WHERE ${groupClauses.join(" AND ")}`;
+    //       }
+    //     }
         
-        // Get the table name from segment_config
-        const tableName = segment.segment_config?.target_table || segment.table_id;
+    //     // Get the table name from segment_config
+    //     const tableName = segment.segment_config?.target_table || segment.table_id;
         
-        // Generate the complete SQL
-        const generatedSql = `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`;
-        console.log("Regenerated SQL:", generatedSql);
+    //     // Generate the complete SQL
+    //     const generatedSql = `SELECT * FROM ${tableName}${whereClause}`;
+    //     console.log("Regenerated SQL:", generatedSql);
         
-        // Update the generated_sql with the newly generated SQL
-        segment.generated_sql = generatedSql;
-      } catch (error) {
-        console.error("Error regenerating SQL:", error);
+    //     // Update the generated_sql with the newly generated SQL
+    //     segment.generated_sql = generatedSql;
+    //   } catch (error) {
+    //     console.error("Error regenerating SQL:", error);
         
-        // If regeneration fails, fall back to the original approach of replacing values
-        let updatedSql = segment.original_generated_sql;
+    //     // If regeneration fails, fall back to the original approach of replacing values
+    //     let updatedSql = segment.original_generated_sql;
         
-        // Replace date values in SQL with dynamic interval expressions
-        datePresetSqlExpressions.forEach(datePresetSql => {
-          // Try to find patterns in the SQL that match this column with a BETWEEN clause
-          const columnName = datePresetSql.column;
-          const sqlExpression = datePresetSql.sqlExpression;
+    //     // Replace date values in SQL with dynamic interval expressions
+    //     datePresetSqlExpressions.forEach(datePresetSql => {
+    //       // Try to find patterns in the SQL that match this column with a BETWEEN clause
+    //       const columnName = datePresetSql.column;
+    //       const sqlExpression = datePresetSql.sqlExpression;
           
-          // Pattern for: column BETWEEN 'date1' AND 'date2'
-          const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
+    //       // Pattern for: column BETWEEN 'date1' AND 'date2'
+    //       const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
           
-          if (pattern.test(updatedSql)) {
-            // Reset the pattern's lastIndex
-            pattern.lastIndex = 0;
-            // Replace the matched pattern with the SQL interval expression
-            updatedSql = updatedSql.replace(pattern, sqlExpression);
-          }
-        });
+    //       if (pattern.test(updatedSql)) {
+    //         // Reset the pattern's lastIndex
+    //         pattern.lastIndex = 0;
+    //         // Replace the matched pattern with the SQL interval expression
+    //         updatedSql = updatedSql.replace(pattern, sqlExpression);
+    //       }
+    //     });
         
-        // Check if the SQL is properly formed with closing brackets and LIMIT
-        if (updatedSql.includes('WHERE (') && !updatedSql.includes(') LIMIT') && !updatedSql.endsWith(')')) {
-          console.log("Adding missing closing bracket to SQL query");
-          updatedSql += ')';
-        }
+    //     // Check if the SQL is properly formed with closing brackets and LIMIT
+    //     if (updatedSql.includes('WHERE (') && !updatedSql.includes(') LIMIT') && !updatedSql.endsWith(')')) {
+    //       console.log("Adding missing closing bracket to SQL query");
+    //       updatedSql += ')';
+    //     }
         
-        // Check if LIMIT clause is missing
-        if (!updatedSql.toLowerCase().includes('limit ')) {
-          console.log("Adding missing LIMIT clause to SQL query");
-          updatedSql += ' LIMIT 1000';
-        }
+    //     // Check if LIMIT clause is missing
+    //     if (!updatedSql.toLowerCase().includes('limit ')) {
+    //       console.log("No LIMIT clause in SQL query - this is OK");
+    //       // Don't add a default LIMIT clause
+    //     }
         
-        console.log("Final SQL after fixes:", updatedSql);
+    //     console.log("Final SQL after fixes:", updatedSql);
         
-        // Update the generated_sql with the fixed SQL
-        segment.generated_sql = updatedSql;
-      }
-    }
+    //     // Update the generated_sql with the fixed SQL
+    //     segment.generated_sql = updatedSql;
+    //   }
+    // }
 
     return res.status(200).json({
       success: true,
@@ -984,6 +1175,17 @@ exports.updateSegment = async (req, res) => {
         success: false,
         message: 'Segment ID is required'
       });
+    }
+    
+    // Decode HTML entities in custom_sql and generated_sql if they exist
+    if (updateData.custom_sql) {
+      updateData.custom_sql = decodeHtmlEntities(updateData.custom_sql);
+      console.log("Decoded Custom SQL:", updateData.custom_sql);
+    }
+    
+    if (updateData.generated_sql) {
+      updateData.generated_sql = decodeHtmlEntities(updateData.generated_sql);
+      console.log("Decoded Generated SQL:", updateData.generated_sql);
     }
 
     // Process filter groups to generate dynamic SQL expressions for date presets
@@ -1026,50 +1228,56 @@ exports.updateSegment = async (req, res) => {
       });
       
       // Update custom SQL with dynamic date expressions if it exists
-      if (updateData.custom_sql && datePresetFilters.length > 0) {
-        let updatedSql = updateData.custom_sql;
+      // if (updateData.custom_sql && datePresetFilters.length > 0) {
+      //   let updatedSql = updateData.custom_sql;
         
-        datePresetFilters.forEach(datePresetFilter => {
-          const columnName = datePresetFilter.column;
-          const sqlExpression = datePresetFilter.sqlExpression;
+      //   datePresetFilters.forEach(datePresetFilter => {
+      //     const columnName = datePresetFilter.column;
+      //     const sqlExpression = datePresetFilter.sqlExpression;
           
-          // Pattern for: column BETWEEN 'date1' AND 'date2'
-          const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
+      //     // Pattern for: column BETWEEN 'date1' AND 'date2'
+      //     const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
           
-          if (pattern.test(updatedSql)) {
-            // Reset the pattern's lastIndex
-            pattern.lastIndex = 0;
-            // Replace the matched pattern with the SQL interval expression
-            updatedSql = updatedSql.replace(pattern, sqlExpression);
-          }
-        });
+      //     if (pattern.test(updatedSql)) {
+      //       // Reset the pattern's lastIndex
+      //       pattern.lastIndex = 0;
+      //       // Replace the matched pattern with the SQL interval expression
+      //       updatedSql = updatedSql.replace(pattern, sqlExpression);
+      //     }
+      //   });
         
-        // Update the custom_sql with the dynamic expressions
-        updateData.custom_sql = updatedSql;
-      }
+      //   // Ensure date functions have properly quoted parameters
+      //   updatedSql = ensureDateFunctionQuotes(updatedSql);
+        
+      //   // Update the custom_sql with the dynamic expressions
+      //   updateData.custom_sql = updatedSql;
+      // }
       
       // Update generated_sql with dynamic date expressions if it exists
-      if (updateData.generated_sql && datePresetFilters.length > 0) {
-        let updatedSql = updateData.generated_sql;
+      // if (updateData.generated_sql && datePresetFilters.length > 0) {
+      //   let updatedSql = updateData.generated_sql;
         
-        datePresetFilters.forEach(datePresetFilter => {
-          const columnName = datePresetFilter.column;
-          const sqlExpression = datePresetFilter.sqlExpression;
+      //   datePresetFilters.forEach(datePresetFilter => {
+      //     const columnName = datePresetFilter.column;
+      //     const sqlExpression = datePresetFilter.sqlExpression;
           
-          // Pattern for: column BETWEEN 'date1' AND 'date2'
-          const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
+      //     // Pattern for: column BETWEEN 'date1' AND 'date2'
+      //     const pattern = new RegExp(`(${columnName}\\s+BETWEEN\\s+['"]?[^'"\\s]+['"]?\\s+AND\\s+['"]?[^'"\\s]+['"]?)`, 'gi');
           
-          if (pattern.test(updatedSql)) {
-            // Reset the pattern's lastIndex
-            pattern.lastIndex = 0;
-            // Replace the matched pattern with the SQL interval expression
-            updatedSql = updatedSql.replace(pattern, sqlExpression);
-          }
-        });
+      //     if (pattern.test(updatedSql)) {
+      //       // Reset the pattern's lastIndex
+      //       pattern.lastIndex = 0;
+      //       // Replace the matched pattern with the SQL interval expression
+      //       updatedSql = updatedSql.replace(pattern, sqlExpression);
+      //     }
+      //   });
         
-        // Update the generated_sql with the dynamic expressions
-        updateData.generated_sql = updatedSql;
-      }
+      //   // Ensure date functions have properly quoted parameters
+      //   updatedSql = ensureDateFunctionQuotes(updatedSql);
+        
+      //   // Update the generated_sql with the dynamic expressions
+      //   updateData.generated_sql = updatedSql;
+      // }
       
       // If no custom_sql but we have filter groups, generate a new SQL with dynamic expressions
       if (!updateData.custom_sql && !updateData.generated_sql && datePresetFilters.length > 0) {
@@ -1234,7 +1442,7 @@ exports.updateSegment = async (req, res) => {
         const tableName = updateData.segment_config?.target_table || updateData.table_id;
         
         // Generate the complete SQL with dynamic expressions
-        updateData.generated_sql = `SELECT * FROM ${tableName}${whereClause} LIMIT 1000`;
+        updateData.generated_sql = `SELECT * FROM ${tableName}${whereClause}`;
         console.log("Generated SQL with dynamic expressions:", updateData.generated_sql);
       }
     }
@@ -1262,6 +1470,9 @@ exports.updateSegment = async (req, res) => {
         }
         if (typeof value === 'boolean') {
           setValues.push(`${field} = ${value}`);
+        } else if (field === 'generated_sql' || field === 'custom_sql') {
+          // Use special escaping for SQL content
+          setValues.push(`${field} = ${value === null ? 'NULL' : escapeSqlContentForLiteral(value)}`);
         } else {
           setValues.push(`${field} = ${value === null ? 'NULL' : escapeSQLString(value)}`);
         }
@@ -1434,6 +1645,15 @@ exports.updateSegment = async (req, res) => {
     }
 
     const segment = updatedSegment[0];
+    
+    // Unescape SQL content if present
+    if (segment.generated_sql) {
+      segment.generated_sql = unescapeSqlContent(segment.generated_sql);
+    }
+    
+    if (segment.custom_sql) {
+      segment.custom_sql = unescapeSqlContent(segment.custom_sql);
+    }
     
     // Parse segment_config if it's a string
     if (typeof segment.segment_config === 'string') {
